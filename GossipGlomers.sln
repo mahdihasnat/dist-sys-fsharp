@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Types", "Types\Types.fsproj", "{43781098-3ACD-4E29-B8CC-F7CA726BBDC7}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Echo", "Echo\Echo.fsproj", "{CA932C15-B702-45BC-AD79-E96E2F25F49E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{43781098-3ACD-4E29-B8CC-F7CA726BBDC7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{43781098-3ACD-4E29-B8CC-F7CA726BBDC7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{43781098-3ACD-4E29-B8CC-F7CA726BBDC7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{43781098-3ACD-4E29-B8CC-F7CA726BBDC7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CA932C15-B702-45BC-AD79-E96E2F25F49E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CA932C15-B702-45BC-AD79-E96E2F25F49E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CA932C15-B702-45BC-AD79-E96E2F25F49E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CA932C15-B702-45BC-AD79-E96E2F25F49E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
