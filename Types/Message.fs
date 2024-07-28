@@ -1,14 +1,8 @@
-﻿module Types
+[<AutoOpen>]
+module Types.Message
 
-open FSharpPlus.Data
 open Fleece
-open Fleece.Operators
-
-type NodeId = NodeId of string
-with
-    static member get_Codec () : Codec<_, NodeId> =
-        Codec.create (fun x -> Ok(NodeId x)) (fun (NodeId x) -> x)
-        |> Codec.compose (Codecs.string)
+open FSharpPlus.Data
 
 type MessageId = MessageId of int
 with

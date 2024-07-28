@@ -6,7 +6,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Types.fs" />
+        <Compile Include="Node.fs" />
+        <Compile Include="Message.fs" />
     </ItemGroup>
 
     <ItemGroup>

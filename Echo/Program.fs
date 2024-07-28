@@ -3,6 +3,7 @@
 open Fleece.SystemTextJson
 open System
 open Types
+open Utilities
 
 let rec processStdin (messageId: int) : unit =
 
@@ -35,28 +36,6 @@ let rec processStdin (messageId: int) : unit =
 
 [<EntryPoint>]
 let main _args =
-    // read line
-    let strLine = Console.ReadLine ()
-    if strLine = null then
-        failwith "No input"
-    eprintfn $"STDIN: {strLine}"
-    let initMessage =
-        match ofJsonText<Message<InitMessage>> strLine with
-        | Error e ->
-            failwith $"{e}"
-        | Ok msg ->
-            msg
-    let initReply : InitReplyMessage =
-        {
-            InReplyTo = initMessage.MessageBody.MessageId
-        }
-    let replyMessage : Message<InitReplyMessage> =
-        {
-            Source = initMessage.MessageBody.NodeId
-            Destination = initMessage.Source
-            MessageBody = initReply
-        }
-    printfn $"{toJsonText replyMessage}"
-    eprintfn $"STDOUT: {toJsonText replyMessage}"
+    initNode () |> ignore
     processStdin (1)
     0
