@@ -8,7 +8,7 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "UniqueIdGen", "UniqueIdGen\
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Utilities", "Utilities\Utilities.fsproj", "{33174CA8-0B6B-4E58-A6C9-50155B0BD988}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SingleNodeBroadcast", "SingleNodeBroadcast\SingleNodeBroadcast.fsproj", "{C1781EAC-3447-47CF-99F6-50F913059A77}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Broadcast", "Broadcast\Broadcast.fsproj", "{C1781EAC-3447-47CF-99F6-50F913059A77}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

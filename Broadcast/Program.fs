@@ -37,7 +37,7 @@ let rec processStdin (node: Node) : unit =
                 eprintfn $"STDOUT: {toJsonText replyMessage}"
                 {
                     node with
-                        Messages = message :: node.Messages
+                        Messages = node.Messages |> Set.add message
                 }
             | InputMessageBody.Read messageId ->
                 let replyMessageBody: ReadReplyMessageBody =
@@ -76,6 +76,6 @@ let main _args =
     let nodeInfo = initNode ()
     processStdin {
         Info = nodeInfo
-        Messages = []
+        Messages = Set.empty
     }
     0

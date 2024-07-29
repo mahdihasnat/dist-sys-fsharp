@@ -56,7 +56,7 @@ with
 
 type ReadReplyMessageBody = {
     InReplyTo: MessageId
-    Messages : List<int>
+    Messages : Set<int>
 }
 with
     static member get_Codec () =
@@ -133,5 +133,5 @@ with
 
 type Node = {
     Info : InitialNodeInfo
-    Messages: List<int>
+    Messages: Set<int>
 }
