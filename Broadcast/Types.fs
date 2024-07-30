@@ -118,8 +118,8 @@ type InputMessageBody =
 with
     static member get_Codec () =
         codec {
-            let! (msgType) = jreq "type" (function | BroadCast _ -> Some "broadcast" | Read _ -> Some "read" | Topology (_, _) -> Some "topology" | _ -> None)
-            and! (messageId : MessageId) = jreq "msg_id" (function | BroadCast (messageId, _) -> Some messageId | Read messageId -> Some messageId | Topology (messageId, _) -> Some messageId | _ -> None)
+            let! (msgType) = jreqAlways "type" (function | BroadCast _ ->"broadcast" | Read _ -> "read" | Topology _ ->"topology")
+            and! (messageId : MessageId) = jreqAlways "msg_id" (function | BroadCast (messageId, _) -> messageId | Read messageId -> messageId | Topology (messageId, _) ->messageId)
             and! (message : Option<int>) = jopt "message" (function BroadCast (_, message) -> Some message | _ -> None)
             and! topology = joptWith (Codecs.option (Codecs.propMapOfNodeId defaultCodec<_, List<NodeId>>))  "topology" (function Topology (_, topology) -> Some (topology)  | _ -> None)
             match msgType with
