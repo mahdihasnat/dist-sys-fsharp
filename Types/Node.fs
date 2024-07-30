@@ -5,13 +5,11 @@ open Fleece
 open FSharpPlus.Data
 
 
-let QQQ<'T> = failwithf "wow"
 
 type NodeId = NodeId of string
 with
-    static member get_Codec () =
-        Codec.create (fun x -> Ok(NodeId x)) (fun (NodeId x) -> x)
-        |> Codec.compose (Codecs.string)
+    static member get_Codec () : Codec<'a, NodeId> when 'a :> IEncoding and 'a : ( new : unit -> 'a) =
+        Codec.isomorph (fun (NodeId x) -> x) (fun x -> NodeId x) Codecs.string
 
 type InitialNodeInfo = {
     NodeId : NodeId

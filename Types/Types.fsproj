@@ -6,6 +6,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="CodecExtension.fs" />
         <Compile Include="Node.fs" />
         <Compile Include="Message.fs" />
     </ItemGroup>

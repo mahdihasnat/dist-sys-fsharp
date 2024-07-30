@@ -107,6 +107,9 @@ with
 module Codecs =
     let propMapOfNodeId (codec: Codec<'Encoding, 'a>) = (Ok << Map.ofSeq << Seq.map (Tuple2.mapItem1 NodeId) <<PropertyList.ToSeq <-> (Map.toArray >> Array.map (Tuple2.mapItem1 (fun (NodeId x) -> x)) >> PropertyList)) >.> Codecs.propList codec
 
+type CodecApplicativeBuilderExtension () =
+    member _.Bind() = QQQ
+
 [<RequireQualifiedAccess>]
 type InputMessageBody =
     | BroadCast of MessageId * Message: int

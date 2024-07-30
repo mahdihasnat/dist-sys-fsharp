@@ -7,8 +7,7 @@ open FSharpPlus.Data
 type MessageId = MessageId of int
 with
     static member get_Codec () : Codec<_, MessageId> =
-        Codec.create (fun x -> Ok(MessageId x)) (fun (MessageId x) -> x)
-        |> Codec.compose (Codecs.int)
+        Codec.isomorph (fun (MessageId x) -> x) (fun x -> MessageId x) Codecs.int
 
 type InitMessage = {
     MessageId: MessageId
