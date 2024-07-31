@@ -1,6 +1,7 @@
 [<AutoOpen>]
 module BroadCast.Types
 
+open System
 open System.Runtime.InteropServices.ObjectiveC
 open FSharpPlus
 open FSharpPlus.Data
@@ -178,6 +179,6 @@ type Node = {
     Messages: Set<int>
     Neighbors: Set<NodeId>
     MessageCounter: int
-    PendingAck: Map<MessageId, (* DestinationNode *) NodeId * (* Messages *) NonEmptySet<int>>
+    PendingAck: Map<MessageId, (* DestinationNode *) NodeId * (* Messages *) NonEmptySet<int> * (* MessageSentOn *) DateTimeOffset>
     NeighborAckedMessages : Map<NodeId, Set<int>>
 }

@@ -1,21 +1,42 @@
 [<AutoOpen>]
 module BroadCast.Transition
 
+open System
 open FSharpPlus.Data
 open Types
 open BroadCast
 
+let removeTimeoutPendingAck (node: Node) : Node =
+    let now = DateTimeOffset.Now
+    {
+        node with
+            PendingAck = node.PendingAck |> Map.filter (fun _ (_, _, sentOn) -> now < sentOn + (TimeSpan.FromMilliseconds 100))
+    }
+
 let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : Node * List<Message<OutputMessageBody>> =
+    let node = removeTimeoutPendingAck node
     match action with
     | Choice2Of2 unit ->
+        let now = DateTimeOffset.Now
         let messages, node =
             node.Neighbors
             |> Set.toSeq
-            |> Seq.choose (fun nodeId ->
-                node.Messages - (node.NeighborAckedMessages.TryFind nodeId |> Option.defaultValue Set.empty)
+            |> Seq.choose (fun neighNodeId ->
+                let ackedMessages = (node.NeighborAckedMessages.TryFind neighNodeId |> Option.defaultValue Set.empty)
+                let nonAckedRecentMessages : Set<int> =
+                    node.PendingAck
+                    |> Map.values
+                    |> Seq.choose (fun (nodeId, messages, _) ->
+                        if nodeId = neighNodeId then
+                            Some (messages |> NonEmptySet.toSet)
+                        else
+                            None
+                    )
+                    |> Seq.fold Set.union Set.empty
+                (node.Messages - ackedMessages) - nonAckedRecentMessages
                 |> NonEmptySet.tryOfSet
                 |> Option.map (fun newMessages ->
-                    (nodeId, newMessages)
+                    (neighNodeId, newMessages)
                 )
             )
             |> Seq.mapFold (fun (node: Node) (nodeId, messages) ->
@@ -32,7 +53,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
                     {
                         node with
                             MessageCounter = node.MessageCounter + 1
-                            PendingAck = node.PendingAck.Add (messageId, (nodeId, messages))
+                            PendingAck = node.PendingAck.Add (messageId, (nodeId, messages, now))
                     }
                 )
             ) node
@@ -97,7 +118,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
         | InputMessageBody.GossipAck messageId ->
             let node =
                 node.PendingAck.TryFind messageId
-                |> Option.map (fun (nodeId, messages) ->
+                |> Option.map (fun (nodeId, messages, _) ->
                     let updatedAckedMessages =
                         node.NeighborAckedMessages.TryFind nodeId
                         |> Option.defaultValue Set.empty
