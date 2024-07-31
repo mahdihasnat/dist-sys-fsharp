@@ -114,21 +114,24 @@ type CodecApplicativeBuilderExtension () =
 type InputMessageBody =
     | BroadCast of MessageId * Message: int
     | Read of MessageId
-    | Topology of MessageId * Topology: Map<NodeId, List<NodeId>>
+    | Topology of MessageId * Topology: Map<NodeId, Set<NodeId>>
+    | Notify of Message: int
 with
     static member get_Codec () =
         codec {
-            let! (msgType) = jreqAlways "type" (function | BroadCast _ ->"broadcast" | Read _ -> "read" | Topology _ ->"topology")
-            and! (messageId : MessageId) = jreqAlways "msg_id" (function | BroadCast (messageId, _) -> messageId | Read messageId -> messageId | Topology (messageId, _) ->messageId)
-            and! (message : Option<int>) = jopt "message" (function BroadCast (_, message) -> Some message | _ -> None)
-            and! topology = joptWith (Codecs.option (Codecs.propMapOfNodeId defaultCodec<_, List<NodeId>>))  "topology" (function Topology (_, topology) -> Some (topology)  | _ -> None)
+            let! (msgType) = jreqAlways "type" (function | BroadCast _ ->"broadcast" | Read _ -> "read" | Topology _ ->"topology" | Notify _ -> "notify")
+            and! (messageId : Option<MessageId>) = jopt "msg_id" (function | BroadCast (messageId, _) -> Some messageId | Read messageId -> Some messageId | Topology (messageId, _) -> Some messageId | Notify _ -> None)
+            and! (message : Option<int>) = jopt "message" (function BroadCast (_, message) -> Some message | Notify message -> Some message | _ -> None)
+            and! topology = joptWith (Codecs.option (Codecs.propMapOfNodeId defaultCodec<_, Set<NodeId>>))  "topology" (function Topology (_, topology) -> Some (topology)  | _ -> None)
             match msgType with
             | s when s = "broadcast" ->
-                return BroadCast(messageId, message |> Option.get)
+                return BroadCast(messageId |> Option.get, message |> Option.get)
             | s when s = "read" ->
-                return Read messageId
+                return Read (messageId |> Option.get)
             | s when s = "topology" ->
-                return Topology(messageId, topology |> Option.get)
+                return Topology(messageId |> Option.get, topology |> Option.get)
+            | s when s = "notify" ->
+                return Notify (message |> Option.get)
             | _ ->
                 return failwithf $"Unknown message type: {msgType}"
         }
@@ -137,4 +140,5 @@ with
 type Node = {
     Info : InitialNodeInfo
     Messages: Set<int>
+    Neighbors: Set<NodeId>
 }

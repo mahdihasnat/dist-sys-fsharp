@@ -13,5 +13,5 @@ with
 
 type InitialNodeInfo = {
     NodeId : NodeId
-    ClusterNodeIds: NonEmptyList<NodeId>
+    ClusterNodeIds: NonEmptySet<NodeId>
 }

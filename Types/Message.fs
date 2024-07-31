@@ -12,7 +12,7 @@ with
 type InitMessage = {
     MessageId: MessageId
     NodeId: NodeId
-    AllNodeIds: NonEmptyList<NodeId>
+    AllNodeIds: NonEmptySet<NodeId>
 }
 with
     static member get_Codec () : Codec<_, InitMessage> =
