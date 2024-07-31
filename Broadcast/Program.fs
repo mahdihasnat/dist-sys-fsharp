@@ -9,6 +9,7 @@ open SingleNodeBroadcast
 
 
 let rec processStdin (node: Node) : unit =
+
     let str = Console.ReadLine ()
     if str = null then
         ()
@@ -21,13 +22,14 @@ let rec processStdin (node: Node) : unit =
             | Ok msg ->
                 msg
 
-        let addOrIgnoreMessage (node: Node) (message: int) : Node =
-            if node.Messages.Contains message then
+        let addOrIgnoreMessage (node: Node) (messages: Set<int>) : Node =
+            if node.Messages.IsSupersetOf messages then
                 node
             else
+                let newMessages = messages - node.Messages
                 for neighbor in node.Neighbors do
                     let notifyMessageBody: InputMessageBody =
-                        InputMessageBody.Notify message
+                        InputMessageBody.Gossip (MessageId node.MessageCounter, newMessages)
                     let notifyMessage: Message<InputMessageBody> =
                         {
                             Source = node.Info.NodeId
@@ -38,12 +40,13 @@ let rec processStdin (node: Node) : unit =
                     eprintfn $"STDOUT: {toJsonText notifyMessage}"
                 {
                     node with
-                        Messages = node.Messages.Add message
+                        Messages = Set.union node.Messages newMessages
+                        MessageCounter = node.MessageCounter + 1
                 }
         let node =
             match msg.MessageBody with
-            | InputMessageBody.Notify message ->
-                addOrIgnoreMessage node message
+            | InputMessageBody.Gossip (messageId, messages) ->
+                addOrIgnoreMessage node messages
 
             | InputMessageBody.BroadCast(messageId, message) ->
                 let replyMessageBody: BroadCastReplyMessageBody =
@@ -59,7 +62,7 @@ let rec processStdin (node: Node) : unit =
                 printfn $"{toJsonText replyMessage}"
                 eprintfn $"STDOUT: {toJsonText replyMessage}"
 
-                addOrIgnoreMessage node message
+                addOrIgnoreMessage node (Set.ofSeq [message])
 
             | InputMessageBody.Read messageId ->
                 let replyMessageBody: ReadReplyMessageBody =
@@ -95,6 +98,21 @@ let rec processStdin (node: Node) : unit =
                         Neighbors = topology.TryFind node.Info.NodeId |> Option.defaultValue Set.empty
                 }
 
+            | InputMessageBody.GossipAck messageId ->
+                node.PendingAck.TryFind messageId
+                |> Option.map (fun (nodeId, messages) ->
+                    let updatedAckedMessages =
+                        node.NeighborAckedMessages.TryFind nodeId
+                        |> Option.defaultValue Set.empty
+                        |> Set.union messages
+                    {
+                        node with
+                            PendingAck = node.PendingAck.Remove messageId
+                            NeighborAckedMessages = node.NeighborAckedMessages.Add (nodeId, updatedAckedMessages)
+                    }
+                )
+                |> Option.defaultValue node
+
         processStdin node
 
 [<EntryPoint>]
@@ -104,5 +122,8 @@ let main _args =
         Info = nodeInfo
         Messages = Set.empty
         Neighbors = Set.empty
+        MessageCounter = 0
+        PendingAck = Map.empty
+        NeighborAckedMessages = Map.empty
     }
     0

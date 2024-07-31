@@ -115,14 +115,16 @@ type InputMessageBody =
     | BroadCast of MessageId * Message: int
     | Read of MessageId
     | Topology of MessageId * Topology: Map<NodeId, Set<NodeId>>
-    | Notify of Message: int
+    | Gossip of MessageId * Messages: Set<int>
+    | GossipAck of MessageId
 with
     static member get_Codec () =
         codec {
-            let! (msgType) = jreqAlways "type" (function | BroadCast _ ->"broadcast" | Read _ -> "read" | Topology _ ->"topology" | Notify _ -> "notify")
-            and! (messageId : Option<MessageId>) = jopt "msg_id" (function | BroadCast (messageId, _) -> Some messageId | Read messageId -> Some messageId | Topology (messageId, _) -> Some messageId | Notify _ -> None)
-            and! (message : Option<int>) = jopt "message" (function BroadCast (_, message) -> Some message | Notify message -> Some message | _ -> None)
+            let! (msgType) = jreqAlways "type" (function | BroadCast _ ->"broadcast" | Read _ -> "read" | Topology _ ->"topology" | Gossip _ -> "gossip" | GossipAck _ -> "gossip_ack")
+            and! (messageId : Option<MessageId>) = jopt "msg_id" (function | BroadCast (messageId, _) | Read messageId | Topology (messageId, _) | GossipAck messageId |  Gossip (messageId, _) -> Some messageId)
+            and! (message : Option<int>) = jopt "message" (function BroadCast (_, message) -> Some message | Gossip _ | Read _ | Topology _ | GossipAck _ -> None)
             and! topology = joptWith (Codecs.option (Codecs.propMapOfNodeId defaultCodec<_, Set<NodeId>>))  "topology" (function Topology (_, topology) -> Some (topology)  | _ -> None)
+            and! messages = jopt "messages" (function | Gossip (_, messages) -> Some messages | BroadCast _ | Read _ | Topology _ | GossipAck _-> None)
             match msgType with
             | s when s = "broadcast" ->
                 return BroadCast(messageId |> Option.get, message |> Option.get)
@@ -130,8 +132,10 @@ with
                 return Read (messageId |> Option.get)
             | s when s = "topology" ->
                 return Topology(messageId |> Option.get, topology |> Option.get)
-            | s when s = "notify" ->
-                return Notify (message |> Option.get)
+            | s when s = "gossip" ->
+                return Gossip (messageId |> Option.get, messages |> Option.get)
+            | s when s = "gossip_ack" ->
+                return GossipAck (messageId |> Option.get)
             | _ ->
                 return failwithf $"Unknown message type: {msgType}"
         }
@@ -141,4 +145,7 @@ type Node = {
     Info : InitialNodeInfo
     Messages: Set<int>
     Neighbors: Set<NodeId>
+    MessageCounter: int
+    PendingAck: Map<MessageId, (* DestinationNode *) NodeId * (* Messages *) Set<int>>
+    NeighborAckedMessages : Map<NodeId, Set<int>>
 }
