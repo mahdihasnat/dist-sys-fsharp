@@ -3,7 +3,7 @@ module Types.CodecExtension
 
 open Fleece
 
-let QQQ<'T> = failwithf "wow"
+let inline QQQ<'T> : 'T = failwithf "wow"
 
 [<AutoOpen>]
 module Codec =

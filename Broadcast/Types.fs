@@ -1,7 +1,9 @@
 [<AutoOpen>]
-module SingleNodeBroadcast.Types
+module BroadCast.Types
 
+open System.Runtime.InteropServices.ObjectiveC
 open FSharpPlus
+open FSharpPlus.Data
 open Types
 open Fleece
 
@@ -115,16 +117,17 @@ type InputMessageBody =
     | BroadCast of MessageId * Message: int
     | Read of MessageId
     | Topology of MessageId * Topology: Map<NodeId, Set<NodeId>>
-    | Gossip of MessageId * Messages: Set<int>
-    | GossipAck of MessageId
+    | Gossip of MessageId * Messages: NonEmptySet<int>
+    | GossipAck of InReplyTo: MessageId
 with
     static member get_Codec () =
         codec {
-            let! (msgType) = jreqAlways "type" (function | BroadCast _ ->"broadcast" | Read _ -> "read" | Topology _ ->"topology" | Gossip _ -> "gossip" | GossipAck _ -> "gossip_ack")
-            and! (messageId : Option<MessageId>) = jopt "msg_id" (function | BroadCast (messageId, _) | Read messageId | Topology (messageId, _) | GossipAck messageId |  Gossip (messageId, _) -> Some messageId)
+            let! (msgType) = jreqAlways "type" (function | BroadCast _ ->"broadcast" | Read _ -> "read" | Topology _ ->"topology" | Gossip _ -> "gossip" | GossipAck _ -> "gossip_ok")
+            and! (messageId : Option<MessageId>) = jopt "msg_id" (function | BroadCast (messageId, _) | Read messageId | Topology (messageId, _) |  Gossip (messageId, _) -> Some messageId | GossipAck _ -> None)
             and! (message : Option<int>) = jopt "message" (function BroadCast (_, message) -> Some message | Gossip _ | Read _ | Topology _ | GossipAck _ -> None)
             and! topology = joptWith (Codecs.option (Codecs.propMapOfNodeId defaultCodec<_, Set<NodeId>>))  "topology" (function Topology (_, topology) -> Some (topology)  | _ -> None)
             and! messages = jopt "messages" (function | Gossip (_, messages) -> Some messages | BroadCast _ | Read _ | Topology _ | GossipAck _-> None)
+            and! inReplyTo = jopt "in_reply_to" (function | GossipAck (inReplyTo) -> Some inReplyTo | _ -> None)
             match msgType with
             | s when s = "broadcast" ->
                 return BroadCast(messageId |> Option.get, message |> Option.get)
@@ -134,18 +137,47 @@ with
                 return Topology(messageId |> Option.get, topology |> Option.get)
             | s when s = "gossip" ->
                 return Gossip (messageId |> Option.get, messages |> Option.get)
-            | s when s = "gossip_ack" ->
-                return GossipAck (messageId |> Option.get)
+            | s when s = "gossip_ok" ->
+                return GossipAck (inReplyTo |> Option.get)
             | _ ->
                 return failwithf $"Unknown message type: {msgType}"
         }
         |> ofObjCodec
 
+type OutputMessageBody =
+    | ReadAck of InReplyTo: MessageId * Messages: Set<int>
+    | BroadCastAck of InReplyTo: MessageId
+    | TopologyAck of InReplyTo: MessageId
+    | GossipAck of InReplyTo: MessageId
+    | Gossip of MessageId: MessageId * Messages: NonEmptySet<int>
+with
+    static member get_Codec () =
+        codec {
+            let! msgType = jreqAlways "type" (function | ReadAck _ -> "read_ok" | BroadCastAck _ -> "broadcast_ok" | TopologyAck _ -> "topology_ok" | GossipAck _ -> "gossip_ok" | Gossip _ -> "gossip")
+            and! inReplyTo = jopt "in_reply_to" (function | ReadAck (inReplyTo, _) | BroadCastAck inReplyTo | TopologyAck inReplyTo | GossipAck inReplyTo -> Some inReplyTo | Gossip _ -> None)
+            and! messages = jopt "messages" (function | ReadAck (_, messages) -> Some messages | BroadCastAck _ | TopologyAck _ | GossipAck _  | Gossip _ -> None)
+            and! gossipMessages = jopt "messages" (function | Gossip (_, messages) -> Some messages | _ -> None)
+            and! messageId = jopt "msg_id" (function | Gossip (messageId, _) -> Some messageId | _ -> None)
+            match msgType with
+            | s when s = "read_ok" ->
+                return ReadAck(inReplyTo |> Option.get, messages |> Option.get)
+            | s when s = "broadcast_ok" ->
+                return BroadCastAck (inReplyTo |> Option.get)
+            | s when s = "topology_ok" ->
+                return TopologyAck (inReplyTo |> Option.get)
+            | s when s = "gossip_ok" ->
+                return GossipAck (inReplyTo |> Option.get)
+            | s when s = "gossip" ->
+                return Gossip (messageId |> Option.get, gossipMessages |> Option.get)
+            | _ ->
+                return failwithf $"invalid msgType {msgType}"
+        }
+        |> ofObjCodec
 type Node = {
     Info : InitialNodeInfo
     Messages: Set<int>
     Neighbors: Set<NodeId>
     MessageCounter: int
-    PendingAck: Map<MessageId, (* DestinationNode *) NodeId * (* Messages *) Set<int>>
+    PendingAck: Map<MessageId, (* DestinationNode *) NodeId * (* Messages *) NonEmptySet<int>>
     NeighborAckedMessages : Map<NodeId, Set<int>>
 }
