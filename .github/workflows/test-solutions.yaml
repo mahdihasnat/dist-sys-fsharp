@@ -13,9 +13,12 @@ jobs:
                     distribution: 'microsoft'
                     java-version: '11'
             -   uses: ts-graphviz/setup-graphviz@v2
+            -   name: Install gnuplot
+                run: sudo apt-get install gnuplot -y
             -   name: Check dependencies
                 run: |
                     dotnet --info
                     java -version
                     dot -V
+                    gnuplot --version
 
