@@ -30,3 +30,9 @@ jobs:
             -   name: Check maelstrom installation
                 run: ls -lah
 
+            -   name: Test Echo challenge
+                run: |
+                    pushd ./Echo
+                    dotnet publish -c Release
+                    ./../maelstrom/maelstrom test -w echo --bin ./bin/Release/net7.0/publish/Echo --node-count 10 --time-limit 1
+
