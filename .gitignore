@@ -44,3 +44,5 @@ msbuild.wrn
 
 # Maelstrom
 store/
+maelstrom/
+maelstrom.tar.bz2
