@@ -2,52 +2,74 @@
 module BroadCast.Program
 
 open System
+open FSharpPlus
 open Fleece.SystemTextJson
+open Microsoft.FSharp.Control
 open Types
 open Utilities
 open BroadCast
+open System.Threading.Tasks
 
-
-
-let rec processStdin (node: Node) : unit =
-
-    let str = Console.ReadLine ()
-    if str = null then
-        ()
-    else
-        eprintfn $"STDIN: {str}"
-        let msg =
-            match ofJsonText<Message<InputMessageBody>> str with
-            | Error e ->
-                failwithf $"Failed to parse input message: {e}"
-            | Ok msg ->
-                msg
-
-        let (node, messages) = transition node (Choice1Of2 msg)
+let rec repeatSchedule (nodeRef: ref<Node>) : Task<unit> =
+    task {
+        do! Task.Delay (TimeSpan.FromMilliseconds 10)
+        let (node', messages) = transition nodeRef.Value (Choice2Of2 ())
+        nodeRef.Value <- node'
         messages
         |> List.iter (fun msg ->
             let json = toJsonText msg
             printfn $"{json}"
             eprintfn $"STDOUT: {json}"
         )
-        let (node, messages) = transition node (Choice2Of2 ())
-        messages
-        |> List.iter (fun msg ->
-            let json = toJsonText msg
-            printfn $"{json}"
-            eprintfn $"STDOUT: {json}"
-        )
-        processStdin node
+        return! repeatSchedule nodeRef
+    }
+
+
+let rec processStdin (nodeRef: ref<Node>) : Task<unit> =
+    task {
+        let! str = Task.Run (fun _ -> Console.ReadLine ())
+        if str = null then
+            return ()
+        else
+            eprintfn $"STDIN: {str}"
+            let msg =
+                match ofJsonText<Message<InputMessageBody>> str with
+                | Error e ->
+                    failwithf $"Failed to parse input message: {e}"
+                | Ok msg ->
+                    msg
+
+            let (node', messages) = transition nodeRef.Value (Choice1Of2 msg)
+            nodeRef.Value <- node'
+            messages
+            |> List.iter (fun msg ->
+                let json = toJsonText msg
+                printfn $"{json}"
+                eprintfn $"STDOUT: {json}"
+            )
+            return! processStdin nodeRef
+    }
 
 [<EntryPoint>]
 let main _args =
     let nodeInfo = initNode ()
-    processStdin {
-        Info = nodeInfo
-        Messages = Set.empty
-        Neighbors = Set.empty
-        MessageCounter = 0
-        PendingAck = Map.empty
-        NeighborAckedMessages = Map.empty
-    }
+    let nodeRef : ref<Node> =
+        ref
+            {
+                Info = nodeInfo
+                Messages = Set.empty
+                Neighbors = Set.empty
+                MessageCounter = 0
+                PendingAck = Map.empty
+                NeighborAckedMessages = Map.empty
+            }
+    let task1 = processStdin nodeRef
+    let async1 = task1 |> Async.AwaitTask
+    let task2 = repeatSchedule nodeRef
+    let async2 = task2 |> Async.AwaitTask
+    [| async2; async1 |]
+    |> Async.Parallel
+    |> Async.RunSynchronously
+    |> ignore
+
     0
