@@ -10,11 +10,35 @@ let removeTimeoutPendingAck (node: Node) : Node =
     let now = DateTimeOffset.Now
     {
         node with
-            PendingAck = node.PendingAck |> Map.filter (fun _ (_, _, sentOn) -> now < sentOn + (TimeSpan.FromMilliseconds 100))
+            PendingAck = node.PendingAck |> Map.filter (fun _ (_, _, sentOn) -> now < sentOn + (TimeSpan.FromMilliseconds 300))
     }
 
+let generateGraph (nodes: NonEmptySet<NodeId>) : Map<NodeId, Set<NodeId>> =
+    let nodes = nodes |> NonEmptySet.toSeq
+    let n = nodes |> Seq.length
+    let k = Math.Sqrt (float n) |> int
+    let blocks = nodes |> Seq.chunkBySize k
+    let edgesWithinBlock : seq<NodeId * NodeId> =
+        blocks
+        |> Seq.collect (fun nodes -> Seq.allPairs nodes nodes)
+    let edgesBetweenBlocks : seq<NodeId * NodeId> =
+        blocks
+        |> Seq.collect (Seq.indexed)
+        |> Seq.groupBy fst
+        |> Seq.map snd
+        |> Seq.map (Seq.map snd)
+        |> Seq.collect (fun nodes -> Seq.allPairs nodes nodes)
+    Seq.append edgesWithinBlock edgesBetweenBlocks
+    |> Seq.groupBy fst
+    |> Seq.map (fun (src, dests) -> src, dests |> Seq.map snd |> Set.ofSeq |> Set.remove src)
+    |> Map.ofSeq
+
 let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : Node * List<Message<OutputMessageBody>> =
+    let totalMessages= node.PendingAck.Count
     let node = removeTimeoutPendingAck node
+    let currentMessages = node.PendingAck.Count
+    if totalMessages <> currentMessages then
+        eprintfn $"Message difference: {totalMessages - currentMessages}"
     match action with
     | Choice2Of2 unit ->
         let now = DateTimeOffset.Now
@@ -101,7 +125,12 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
             let node =
                 {
                     node with
-                        Neighbors = topology.TryFind node.Info.NodeId |> Option.defaultValue Set.empty
+                        Neighbors =
+                            // node.Info.ClusterNodeIds |> NonEmptySet.toSet |> Set.remove node.Info.NodeId // too much megs-per-op
+                            // topology.TryFind node.Info.NodeId |> Option.defaultValue Set.empty // too much stable latency
+                            generateGraph node.Info.ClusterNodeIds
+                            |> Map.tryFind node.Info.NodeId
+                            |> Option.defaultValue Set.empty
                 }
             (node, [ replyMessage ])
         | InputMessageBody.Gossip(messageId, messages) ->
@@ -113,10 +142,16 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
                     Destination = msg.Source
                     MessageBody = replyMessageBody
                 }
+            let alreadyAckedMessages = node.NeighborAckedMessages.TryFind msg.Source |> Option.defaultValue Set.empty
+            let updatedAckedMessages =
+                alreadyAckedMessages
+                |> Set.union (messages |> NonEmptySet.toSet)
             let node =
                 {
                     node with
                         Messages = Set.union node.Messages (messages |> NonEmptySet.toSet)
+                        NeighborAckedMessages =
+                            node.NeighborAckedMessages.Add (msg.Source, updatedAckedMessages)
                 }
             (node, [ replyMessage ])
         | InputMessageBody.GossipAck messageId ->
