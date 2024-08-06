@@ -1,5 +1,6 @@
 import re
 from edn_format import Keyword, loads as edn_loads
+import argparse
 
 # Function to preprocess the EDN data
 def preprocess_edn(edn_data):
@@ -21,6 +22,16 @@ stable_latencies = data[Keyword("workload")][Keyword("stable-latencies")]
 print("Median Latency: ", stable_latencies[0.5])
 print("Maximum Latency: ", stable_latencies[1])
 
-assert msgs_per_op < 30, f"msgs-per-op is {msgs_per_op}, which is not less than 30."
-assert stable_latencies[0.5] < 400, f"Median latency is {stable_latencies[0.5]}, which is not less than 400ms."
-assert stable_latencies[1] < 600, f"Maximum latency is {stable_latencies[1]}, which is not less than 600ms."
+
+parser = argparse.ArgumentParser(description='Process some EDN data.')
+parser.add_argument('--msgs-per-op', type=int, required=True, help='Number of messages per operation')
+parser.add_argument('--median-latency', type=int, required=True, help='Median latency in ms')
+parser.add_argument('--max-latency', type=int, required=True, help='Maximum latency in ms')
+args = parser.parse_args()
+msgs_per_op_threshold = args.msgs_per_op
+median_latency_threshold = args.median_latency
+max_latency_threshold = args.max_latency
+
+assert msgs_per_op < median_latency_threshold, f"msgs-per-op is {msgs_per_op}, which is not less than {msgs_per_op_threshold}."
+assert stable_latencies[0.5] < median_latency_threshold, f"Median latency is {stable_latencies[0.5]}, which is not less than {median_latency_threshold}ms."
+assert stable_latencies[1] < max_latency_threshold, f"Maximum latency is {stable_latencies[1]}, which is not less than {max_latency_threshold}ms."
