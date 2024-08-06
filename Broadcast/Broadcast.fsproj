@@ -8,12 +8,16 @@
     <ItemGroup>
         <Compile Include="Types.fs" />
         <Compile Include="Transition.fs" />
-        <Compile Include="Program.fs"/>
+        <Compile Include="Program.fs" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\Types\Types.fsproj" />
       <ProjectReference Include="..\Utilities\Utilities.fsproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Argu" Version="6.2.4" />
     </ItemGroup>
 
 </Project>
