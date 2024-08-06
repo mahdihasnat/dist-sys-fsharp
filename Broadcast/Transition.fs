@@ -2,15 +2,24 @@
 module BroadCast.Transition
 
 open System
+open FSharpPlus
 open FSharpPlus.Data
+open Microsoft.FSharp.Core
 open Types
 open BroadCast
 
 let removeTimeoutPendingAck (node: Node) : Node =
     let now = DateTimeOffset.Now
+    let pendingMessages, timedOutMessages =
+        node.PendingAck
+        |> Map.partition (fun _ (_, _, sentOn) -> now < sentOn + (TimeSpan.FromMilliseconds 300))
+    let timedOutMessages =
+        timedOutMessages
+        |> Map.map (fun _ (destNode, messages, _sentOn) -> (destNode, messages))
     {
         node with
-            PendingAck = node.PendingAck |> Map.filter (fun _ (_, _, sentOn) -> now < sentOn + (TimeSpan.FromMilliseconds 300))
+            PendingAck = pendingMessages
+            TimedOutMessages = node.TimedOutMessages |> Map.toList |> List.append (timedOutMessages |> Map.toList) |> Map.ofList
     }
 
 let generateGraph (nodes: NonEmptySet<NodeId>) : Map<NodeId, Set<NodeId>> =
@@ -157,7 +166,9 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
         | InputMessageBody.GossipAck messageId ->
             let node =
                 node.PendingAck.TryFind messageId
-                |> Option.map (fun (nodeId, messages, _) ->
+                |> Option.map (fun (destNodeId, messages, _) -> (destNodeId, messages))
+                |> Option.orElse (node.TimedOutMessages.TryFind messageId)
+                |> Option.map (fun (nodeId, messages) ->
                     let updatedAckedMessages =
                         node.NeighborAckedMessages.TryFind nodeId
                         |> Option.defaultValue Set.empty
@@ -165,6 +176,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
                     {
                         node with
                             PendingAck = node.PendingAck.Remove messageId
+                            TimedOutMessages = node.TimedOutMessages.Remove messageId
                             NeighborAckedMessages = node.NeighborAckedMessages.Add (nodeId, updatedAckedMessages)
                     }
                 )

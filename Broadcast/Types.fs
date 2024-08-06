@@ -174,11 +174,13 @@ with
                 return failwithf $"invalid msgType {msgType}"
         }
         |> ofObjCodec
+
 type Node = {
     Info : InitialNodeInfo
     Messages: Set<int>
     Neighbors: Set<NodeId>
     MessageCounter: int
     PendingAck: Map<MessageId, (* DestinationNode *) NodeId * (* Messages *) NonEmptySet<int> * (* MessageSentOn *) DateTimeOffset>
+    TimedOutMessages: Map<MessageId, (* DestinationNode *) NodeId * (* Messages *) NonEmptySet<int>>
     NeighborAckedMessages : Map<NodeId, Set<int>>
 }

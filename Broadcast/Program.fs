@@ -83,6 +83,7 @@ let main args =
                 Neighbors = Set.empty
                 MessageCounter = 0
                 PendingAck = Map.empty
+                TimedOutMessages = Map.empty
                 NeighborAckedMessages = Map.empty
             }
     let task1 = processStdin nodeRef
