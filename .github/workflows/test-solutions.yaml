@@ -44,16 +44,16 @@ jobs:
                 run: ./maelstrom/maelstrom test -w echo --bin ./bin/Echo/Echo --node-count 10 --time-limit 1
 
             -   name: Test Unique Id Generation challenge
-                run: ./maelstrom/maelstrom test -w unique-ids --bin ./bin/UniqueIdGen/UniqueIdGen --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition --log-stderr true
+                run: ./maelstrom/maelstrom test -w unique-ids --bin ./bin/UniqueIdGen/UniqueIdGen --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition
 
             -   name: Test Single Node Broadcast challenge
-                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 1 --time-limit 20 --rate 10 --log-stderr true
+                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 1 --time-limit 20 --rate 10
 
             -   name: Test Multi Node Broadcast challenge
-                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 5 --time-limit 20 --rate 10 --log-stderr true
+                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 5 --time-limit 20 --rate 10
 
             -   name: Test Fault Tolerant Broadcast challenge
-                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 5 --time-limit 20 --rate 10 --nemesis partition --log-stderr true
+                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 5 --time-limit 20 --rate 10 --nemesis partition
 
             -   name: Test Efficient BroadCast, Part 1
                 run: |
