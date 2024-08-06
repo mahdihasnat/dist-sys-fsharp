@@ -16,7 +16,7 @@ let semaphore: SemaphoreSlim = new SemaphoreSlim(1)
 let repeatSchedule (nodeRef: ref<Node>) : Task<unit> =
     task {
         while true do
-            do! Task.Delay (TimeSpan.FromMilliseconds 100)
+            do! Task.Delay (TimeSpan.FromMilliseconds 150)
             do! semaphore.WaitAsync ()
             let (node', messages) = transition nodeRef.Value (Choice2Of2 ())
             nodeRef.Value <- node'
