@@ -13,6 +13,10 @@ jobs:
                     distribution: 'microsoft'
                     java-version: '11'
             -   uses: ts-graphviz/setup-graphviz@v2
+            -   uses: actions/setup-python@v4
+                with:
+                    python-version: '3.12'
+            -   run: pip install edn_format
             -   name: Install gnuplot
                 run: sudo apt-get install gnuplot -y
             -   name: Check dependencies
@@ -21,7 +25,7 @@ jobs:
                     java -version
                     dot -V
                     gnuplot --version
-
+                    python --version
             -   name: Download and isntall maelstrom program
                 run: |
                     wget -c "https://github.com/jepsen-io/maelstrom/releases/download/v0.2.3/maelstrom.tar.bz2"
@@ -51,5 +55,9 @@ jobs:
             -   name: Test Fault Tolerant Broadcast challenge
                 run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 5 --time-limit 20 --rate 10 --nemesis partition --log-stderr true
 
+            -   name: Test Efficient BroadCast, Part 1
+                run: |
+                    ./maelstrom/maelstrom test -w broadcast --bin ./bin/Release/net7.0/publish/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100
+                    python ./.github/scripts/checker_3d.py
 
 
