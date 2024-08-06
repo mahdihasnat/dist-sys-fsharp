@@ -19,13 +19,13 @@ let rec repeatSchedule (nodeRef: ref<Node>) : Task<unit> =
         do! semaphore.WaitAsync ()
         let (node', messages) = transition nodeRef.Value (Choice2Of2 ())
         nodeRef.Value <- node'
-        semaphore.Release () |> ignore
         messages
         |> List.iter (fun msg ->
             let json = toJsonText msg
             printfn $"{json}"
             eprintfn $"STDOUT: {json}"
         )
+        semaphore.Release () |> ignore
         return! repeatSchedule nodeRef
     }
 
@@ -46,14 +46,13 @@ let rec processStdin (nodeRef: ref<Node>) : Task<unit> =
             do! semaphore.WaitAsync ()
             let (node', messages) = transition nodeRef.Value (Choice1Of2 msg)
             nodeRef.Value <- node'
-            semaphore.Release () |> ignore
-
             messages
             |> List.iter (fun msg ->
                 let json = toJsonText msg
                 printfn $"{json}"
                 eprintfn $"STDOUT: {json}"
             )
+            semaphore.Release () |> ignore
             return! processStdin nodeRef
     }
 
