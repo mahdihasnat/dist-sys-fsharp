@@ -13,20 +13,20 @@ open System.Threading.Tasks
 
 let semaphore: SemaphoreSlim = new SemaphoreSlim(1)
 
-let rec repeatSchedule (nodeRef: ref<Node>) : Task<unit> =
+let repeatSchedule (nodeRef: ref<Node>) : Task<unit> =
     task {
-        do! Task.Delay (TimeSpan.FromMilliseconds 10)
-        do! semaphore.WaitAsync ()
-        let (node', messages) = transition nodeRef.Value (Choice2Of2 ())
-        nodeRef.Value <- node'
-        messages
-        |> List.iter (fun msg ->
-            let json = toJsonText msg
-            printfn $"{json}"
-            eprintfn $"STDOUT: {json}"
-        )
-        semaphore.Release () |> ignore
-        return! repeatSchedule nodeRef
+        while true do
+            do! Task.Delay (TimeSpan.FromMilliseconds 10)
+            do! semaphore.WaitAsync ()
+            let (node', messages) = transition nodeRef.Value (Choice2Of2 ())
+            nodeRef.Value <- node'
+            messages
+            |> List.iter (fun msg ->
+                let json = toJsonText msg
+                printfn $"{json}"
+                eprintfn $"STDOUT: {json}"
+            )
+            semaphore.Release () |> ignore
     }
 
 
