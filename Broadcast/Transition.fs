@@ -18,8 +18,12 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
     match action with
     | Choice2Of2 unit ->
         let now = DateTimeOffset.Now
+        let pendingAckNodes =
+            node.PendingAck.Values
+            |> Seq.map (fun (nodeId, _, _) -> nodeId)
+            |> Set.ofSeq
         let messages, node =
-            node.Neighbors
+            Set.difference node.Neighbors pendingAckNodes
             |> Set.toSeq
             |> Seq.choose (fun neighNodeId ->
                 let ackedMessages = (node.NeighborAckedMessages.TryFind neighNodeId |> Option.defaultValue Set.empty)

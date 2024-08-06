@@ -2,6 +2,7 @@
 module BroadCast.Program
 
 open System
+open System.Threading
 open FSharpPlus
 open Fleece.SystemTextJson
 open Microsoft.FSharp.Control
@@ -10,11 +11,15 @@ open Utilities
 open BroadCast
 open System.Threading.Tasks
 
+let semaphore: SemaphoreSlim = new SemaphoreSlim(1)
+
 let rec repeatSchedule (nodeRef: ref<Node>) : Task<unit> =
     task {
         do! Task.Delay (TimeSpan.FromMilliseconds 10)
+        do! semaphore.WaitAsync ()
         let (node', messages) = transition nodeRef.Value (Choice2Of2 ())
         nodeRef.Value <- node'
+        semaphore.Release () |> ignore
         messages
         |> List.iter (fun msg ->
             let json = toJsonText msg
@@ -38,9 +43,11 @@ let rec processStdin (nodeRef: ref<Node>) : Task<unit> =
                     failwithf $"Failed to parse input message: {e}"
                 | Ok msg ->
                     msg
-
+            do! semaphore.WaitAsync ()
             let (node', messages) = transition nodeRef.Value (Choice1Of2 msg)
             nodeRef.Value <- node'
+            semaphore.Release () |> ignore
+
             messages
             |> List.iter (fun msg ->
                 let json = toJsonText msg
