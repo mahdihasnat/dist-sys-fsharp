@@ -9,7 +9,7 @@ open Types
 open BroadCast
 
 module Constants =
-    let maxOpenConnections = 1
+    let maxOpenConnections = 2
 
 let removeTimeoutPendingAck (node: Node) : Node =
     let now = DateTimeOffset.Now
@@ -54,17 +54,24 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
     match action with
     | Choice2Of2 unit ->
         let now = DateTimeOffset.Now
-        let pendingMessageCount: Map<NodeId, int> =
+        let pendingConnectionCount: Map<NodeId, int> =
             node.PendingAck
             |> Map.toSeq
             |> Seq.map (fun (_messageId, (nodeId, _, _)) -> nodeId)
             |> Seq.groupBy id
             |> Seq.map (fun (nodeId, nodeIds) -> (nodeId, nodeIds |> Seq.length))
             |> Map.ofSeq
+        let pendingMessageCount: Map<NodeId, int> =
+            node.PendingAck
+            |> Map.toSeq
+            |> Seq.map (fun (_messageId, (nodeId, messages, _)) -> (nodeId, messages |> NonEmptySet.count))
+            |> Seq.groupBy fst
+            |> Seq.map (fun (nodeId, counts) -> (nodeId, counts |> Seq.map snd |> Seq.sum))
+            |> Map.ofSeq
         let messages, node =
             node.Neighbors
             |> Seq.filter (fun nodeId ->
-                pendingMessageCount.TryFind nodeId
+                pendingConnectionCount.TryFind nodeId
                 |> Option.defaultValue 0
                 |> (>) Constants.maxOpenConnections
             )
@@ -83,6 +90,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
 
                 (node.Messages - ackedMessages) - nonAckedRecentMessages
                 |> NonEmptySet.tryOfSet
+                |> Option.filter (fun newMessages -> newMessages.Count > (pendingMessageCount.TryFind neighNodeId |> Option.defaultValue 0))
                 |> Option.map (fun newMessages ->
                     (neighNodeId, newMessages)
                 )
