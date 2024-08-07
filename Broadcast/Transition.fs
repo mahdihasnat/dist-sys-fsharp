@@ -8,11 +8,14 @@ open Microsoft.FSharp.Core
 open Types
 open BroadCast
 
+module Constants =
+    let maxOpenConnections = 2
+
 let removeTimeoutPendingAck (node: Node) : Node =
     let now = DateTimeOffset.Now
     let pendingMessages, timedOutMessages =
         node.PendingAck
-        |> Map.partition (fun _ (_, _, sentOn) -> now < sentOn + (TimeSpan.FromMilliseconds 210))
+        |> Map.partition (fun _ (_, _, sentOn) -> now < sentOn + (TimeSpan.FromMilliseconds 240))
     let timedOutMessages =
         timedOutMessages
         |> Map.map (fun _ (destNode, messages, _sentOn) -> (destNode, messages))
@@ -51,13 +54,20 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
     match action with
     | Choice2Of2 unit ->
         let now = DateTimeOffset.Now
-        let pendingAckNodes =
-            node.PendingAck.Values
-            |> Seq.map (fun (nodeId, _, _) -> nodeId)
-            |> Set.ofSeq
+        let pendingMessageCount: Map<NodeId, int> =
+            node.PendingAck
+            |> Map.toSeq
+            |> Seq.map (fun (_messageId, (nodeId, _, _)) -> nodeId)
+            |> Seq.groupBy id
+            |> Seq.map (fun (nodeId, nodeIds) -> (nodeId, nodeIds |> Seq.length))
+            |> Map.ofSeq
         let messages, node =
-            Set.difference node.Neighbors pendingAckNodes
-            |> Set.toSeq
+            node.Neighbors
+            |> Seq.filter (fun nodeId ->
+                pendingMessageCount.TryFind nodeId
+                |> Option.defaultValue 0
+                |> (>) Constants.maxOpenConnections
+            )
             |> Seq.choose (fun neighNodeId ->
                 let ackedMessages = (node.NeighborAckedMessages.TryFind neighNodeId |> Option.defaultValue Set.empty)
                 let nonAckedRecentMessages : Set<int> =
