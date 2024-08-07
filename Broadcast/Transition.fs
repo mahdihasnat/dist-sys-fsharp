@@ -12,7 +12,7 @@ let removeTimeoutPendingAck (node: Node) : Node =
     let now = DateTimeOffset.Now
     let pendingMessages, timedOutMessages =
         node.PendingAck
-        |> Map.partition (fun _ (_, _, sentOn) -> now < sentOn + (TimeSpan.FromMilliseconds 250))
+        |> Map.partition (fun _ (_, _, sentOn) -> now < sentOn + (TimeSpan.FromMilliseconds 210))
     let timedOutMessages =
         timedOutMessages
         |> Map.map (fun _ (destNode, messages, _sentOn) -> (destNode, messages))
