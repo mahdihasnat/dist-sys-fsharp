@@ -59,10 +59,10 @@ jobs:
                 run: |
                     ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 --nemesis partition 90
                     ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 50
-                    python ./.github/scripts/checker_3d.py --msgs-per-op 30 --median-latency 400 --max-latency 600
+                    python ./.github/scripts/checker_task_3.py --msgs-per-op 30 --median-latency 400 --max-latency 600
             -   name: Test Efficient BroadCast, Part 2
                 run: |
                     ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 150
-                    python ./.github/scripts/checker_3d.py --msgs-per-op 20 --median-latency 1000 --max-latency 2000
+                    python ./.github/scripts/checker_task_3.py --msgs-per-op 20 --median-latency 1000 --max-latency 2000
 
 
