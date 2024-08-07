@@ -9,7 +9,7 @@ open Types
 open BroadCast
 
 module Constants =
-    let maxOpenConnections = 2
+    let maxOpenConnections = 1
 
 let removeTimeoutPendingAck (node: Node) : Node =
     let now = DateTimeOffset.Now
@@ -80,6 +80,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
                             None
                     )
                     |> Seq.fold Set.union Set.empty
+
                 (node.Messages - ackedMessages) - nonAckedRecentMessages
                 |> NonEmptySet.tryOfSet
                 |> Option.map (fun newMessages ->
