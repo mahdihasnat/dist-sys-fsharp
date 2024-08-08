@@ -41,28 +41,28 @@ jobs:
                     dotnet publish ./Broadcast/Broadcast.fsproj --no-self-contained -o ./bin/Broadcast/
 
             -   name: Test Echo challenge
-                run: ./maelstrom/maelstrom test -w echo --bin ./bin/Echo/Echo --node-count 10 --time-limit 1
+                run: ./maelstrom/maelstrom test -w echo --bin ./bin/Echo/Echo --node-count 10 --time-limit 1 >> /dev/null
 
             -   name: Test Unique Id Generation challenge
-                run: ./maelstrom/maelstrom test -w unique-ids --bin ./bin/UniqueIdGen/UniqueIdGen --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition
+                run: ./maelstrom/maelstrom test -w unique-ids --bin ./bin/UniqueIdGen/UniqueIdGen --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition >> /dev/null
 
             -   name: Test Single Node Broadcast challenge
-                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 1 --time-limit 20 --rate 10 10
+                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 1 --time-limit 20 --rate 10 10 >> /dev/null
 
             -   name: Test Multi Node Broadcast challenge
-                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 5 --time-limit 20 --rate 10 10
+                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 5 --time-limit 20 --rate 10 10 >> /dev/null
 
             -   name: Test Fault Tolerant Broadcast challenge
-                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 5 --time-limit 20 --rate 10 --nemesis partition 10
+                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 5 --time-limit 20 --rate 10 --nemesis partition 10 >> /dev/null
 
             -   name: Test Efficient BroadCast, Part 1
                 run: |
-                    ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 --nemesis partition 90
+                    ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 --nemesis partition 90 >> /dev/null
                     ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 50 >> /dev/null
                     python ./.github/scripts/checker_task_3.py --msgs-per-op 30 --median-latency 400 --max-latency 600
             -   name: Test Efficient BroadCast, Part 2
                 run: |
-                    ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 150
+                    ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 150 >> /dev/null
                     python ./.github/scripts/checker_task_3.py --msgs-per-op 20 --median-latency 1000 --max-latency 2000
 
             -   uses: actions/upload-artifact@v4
