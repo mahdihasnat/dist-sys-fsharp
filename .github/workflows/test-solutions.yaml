@@ -65,4 +65,8 @@ jobs:
                     ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 150
                     python ./.github/scripts/checker_task_3.py --msgs-per-op 20 --median-latency 1000 --max-latency 2000
 
-
+            -   uses: actions/upload-artifact@v4
+                if: always()
+                with:
+                    name: Collect store folder
+                    path: store/
