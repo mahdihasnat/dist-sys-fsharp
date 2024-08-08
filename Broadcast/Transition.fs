@@ -90,7 +90,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
 
                 (node.Messages - ackedMessages) - nonAckedRecentMessages
                 |> NonEmptySet.tryOfSet
-                |> Option.filter (fun newMessages -> newMessages.Count > (pendingMessageCount.TryFind neighNodeId |> Option.defaultValue 0) / 2)
+                |> Option.filter (fun newMessages -> newMessages.Count > (pendingMessageCount.TryFind neighNodeId |> Option.defaultValue 0) * 3 / 4)
                 |> Option.map (fun newMessages ->
                     (neighNodeId, newMessages)
                 )
