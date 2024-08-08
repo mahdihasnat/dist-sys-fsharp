@@ -15,9 +15,14 @@ open Argu
 let semaphore: SemaphoreSlim = new SemaphoreSlim(1)
 
 let repeatSchedule (timerInterval: TimeSpan) (nodeRef: ref<Node>) : Task<unit> =
+    let mutable lastAction = DateTimeOffset.Now
     task {
         while true do
-            do! Task.Delay timerInterval
+            let now = DateTimeOffset.Now
+            if now < lastAction + timerInterval then
+                do! Task.Delay (lastAction + timerInterval - now)
+            lastAction <- DateTimeOffset.Now
+
             do! semaphore.WaitAsync ()
             let (node', messages) = transition nodeRef.Value (Choice2Of2 ())
             nodeRef.Value <- node'
