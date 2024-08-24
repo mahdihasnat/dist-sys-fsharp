@@ -10,6 +10,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Utilities", "Utilities\Util
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Broadcast", "Broadcast\Broadcast.fsproj", "{C1781EAC-3447-47CF-99F6-50F913059A77}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "GrowOnlyCounter", "GrowOnlyCounter\GrowOnlyCounter.fsproj", "{A89CEABF-CFC3-4907-8552-B7A8AC01271E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,9 @@ Global
 		{C1781EAC-3447-47CF-99F6-50F913059A77}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C1781EAC-3447-47CF-99F6-50F913059A77}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C1781EAC-3447-47CF-99F6-50F913059A77}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A89CEABF-CFC3-4907-8552-B7A8AC01271E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A89CEABF-CFC3-4907-8552-B7A8AC01271E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A89CEABF-CFC3-4907-8552-B7A8AC01271E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A89CEABF-CFC3-4907-8552-B7A8AC01271E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
