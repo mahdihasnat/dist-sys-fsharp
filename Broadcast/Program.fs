@@ -12,35 +12,6 @@ open BroadCast
 open System.Threading.Tasks
 open Argu
 
-let semaphore: SemaphoreSlim = new SemaphoreSlim(1)
-
-
-let rec processStdin (nodeRef: ref<Node>) : Task<unit> =
-    task {
-        let! str = Task.Run (fun _ -> Console.ReadLine ())
-        if str = null then
-            return ()
-        else
-            eprintfn $"STDIN: {str}"
-            let msg =
-                match ofJsonText<Message<InputMessageBody>> str with
-                | Error e ->
-                    failwithf $"Failed to parse input message: {e}"
-                | Ok msg ->
-                    msg
-            do! semaphore.WaitAsync ()
-            let (node', messages) = transition nodeRef.Value (Choice1Of2 msg)
-            nodeRef.Value <- node'
-            messages
-            |> List.iter (fun msg ->
-                let json = toJsonText msg
-                printfn $"{json}"
-                eprintfn $"STDOUT: {json}"
-            )
-            semaphore.Release () |> ignore
-            return! processStdin nodeRef
-    }
-
 [<RequireQualifiedAccess>]
 type Arguments=
     | [<MainCommand>] TimerIntervalMilliseconds of int
@@ -59,6 +30,7 @@ let main args =
         parseResults.GetResult(Arguments.TimerIntervalMilliseconds)
     eprintfn $"TimerIntervalMilliseconds: {timerIntervalMilliseconds}"
     let nodeInfo = initNode ()
+    let semaphore: SemaphoreSlim = new SemaphoreSlim(1)
     let nodeRef : ref<Node> =
         ref
             {
@@ -70,7 +42,9 @@ let main args =
                 TimedOutMessages = Map.empty
                 NeighborAckedMessages = Map.empty
             }
-    let task1 = processStdin nodeRef
+    let task1 = processStdin
+                    (nodeRef, semaphore)
+                    transition
     let async1 = task1 |> Async.AwaitTask
     let task2 = repeatSchedule
                     (TimeSpan.FromMilliseconds (float timerIntervalMilliseconds))
