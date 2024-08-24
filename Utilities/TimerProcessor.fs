@@ -1,5 +1,5 @@
 [<AutoOpen>]
-module Utilities.Timer
+module Utilities.TimerProcessor
 
 open System
 open System.Threading
