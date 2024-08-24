@@ -61,13 +61,14 @@ jobs:
                     ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 --nemesis partition 90 >> /dev/null
                     ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 40 >> /dev/null
                     python ./.github/scripts/checker_task_3.py --msgs-per-op 30 --median-latency 400 --max-latency 600
+
             -   name: Test Efficient BroadCast, Part 2
                 run: |
                     ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 150 >> /dev/null
                     python ./.github/scripts/checker_task_3.py --msgs-per-op 20 --median-latency 1000 --max-latency 2000
 
             -   name: Test Grow Only Counter
-                run: ./maelstrom/maelstrom test -w g-counter --bin ./bin/GrowOnlyCounter/GrowOnlyCounter--node-count 3 --rate 100 --time-limit 20 --nemesis partition
+                run: ./maelstrom/maelstrom test -w g-counter --bin ./bin/GrowOnlyCounter/GrowOnlyCounter --node-count 3 --rate 100 --time-limit 20 --nemesis partition
 
             -   uses: actions/upload-artifact@v4
                 if: always()
