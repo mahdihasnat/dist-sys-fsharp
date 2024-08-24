@@ -4,3 +4,10 @@
 - Extract tar file
 - Modify ./Echo/test.sh and set correct path for maelstrom server
 - Run ./Echo/test.sh
+
+# Challenge #1: Echo
+Simple echo node, reads echo request and sends echo_ok response.
+
+# Challenge #2: UniqueIdGen
+One solution can be to generate Guid.
+But in my case, we already have node id as distinct number. So for each node we can create a unique id by appending a counter with the node id. For subsequent requests, we can increment the counter.
