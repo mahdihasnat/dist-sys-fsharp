@@ -51,3 +51,10 @@ Here we need to further optimize message per operation below 20. But median stab
 Our solution is same as previous but here we run the timer 150ms apart. So we will be sending less frequent gossip rpc.
 
 Our solution could achive max stable latency ~600ms and median stable latency ~360ms and messages per operation ~17.
+
+# Challenge #4: Grow-Only Counter
+We will face add rpc to any node, that will increment the counter. Read rpc will return the current counter value.
+
+This challenge comes with a go library `seq-kv` that will implement sequential key value store on the cluster. But we are solving this problem in `F#` language. So we don't have access to the provided library.
+
+It turns out that if we generate a unique id at time time of receiving a `add` rpc, and consider this addition as a broadcast message, we can solve this problem using the solution of Challenge #3. When we get the `read` rpc, we will just accumulate the value by looking at the messages we have seen so far.
