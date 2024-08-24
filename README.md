@@ -11,3 +11,9 @@ Simple echo node, reads echo request and sends echo_ok response.
 # Challenge #2: UniqueIdGen
 One solution can be to generate Guid.
 But in my case, we already have node id as distinct number. So for each node we can create a unique id by appending a counter with the node id. For subsequent requests, we can increment the counter.
+
+# Challenge #3a: Single node broadcast
+Simple container node. For broadcast rpc, we store new messages in the node. For read rpc, we just return the stored messages.
+
+# Challenge #3b: Multi node broadcast
+Every node maintains its current message list. For every broadcast rpc, if this node is seeing this message for the first time, it will notify this message to every neighbour node. For notify rpc from peers, it will do the same as broadcast rpc.
