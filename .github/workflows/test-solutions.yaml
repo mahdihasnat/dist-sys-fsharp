@@ -39,6 +39,7 @@ jobs:
                     dotnet publish ./Echo/Echo.fsproj --no-self-contained -o ./bin/Echo/
                     dotnet publish ./UniqueIdGen/UniqueIdGen.fsproj --no-self-contained -o ./bin/UniqueIdGen/
                     dotnet publish ./Broadcast/Broadcast.fsproj --no-self-contained -o ./bin/Broadcast/
+                    dotnet publish ./GrowOnlyCounter/GrowOnlyCounter.fsproj --no-self-contained -o ./bin/GrowOnlyCounter/
 
             -   name: Test Echo challenge
                 run: ./maelstrom/maelstrom test -w echo --bin ./bin/Echo/Echo --node-count 10 --time-limit 1 >> /dev/null
@@ -64,6 +65,9 @@ jobs:
                 run: |
                     ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 150 >> /dev/null
                     python ./.github/scripts/checker_task_3.py --msgs-per-op 20 --median-latency 1000 --max-latency 2000
+
+            -   name: Test Grow Only Counter
+                run: ./maelstrom/maelstrom test -w g-counter --bin ./bin/GrowOnlyCounter/GrowOnlyCounter--node-count 3 --rate 100 --time-limit 20 --nemesis partition
 
             -   uses: actions/upload-artifact@v4
                 if: always()
