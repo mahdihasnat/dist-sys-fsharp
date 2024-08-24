@@ -10,7 +10,7 @@ open Types
 
 let inline repeatSchedule
         (timerInterval: TimeSpan)
-        ((nodeRef: ref<'Node>), semaphore: SemaphoreSlim)
+        (nodeRef: ref<'Node>, semaphore: SemaphoreSlim)
         (generator: 'Node -> 'TimerAction)
         (transition: 'Node -> Choice<'InputAction, 'TimerAction> -> 'Node * List<Message<^OutputMessage>>)
             : Task<unit> =

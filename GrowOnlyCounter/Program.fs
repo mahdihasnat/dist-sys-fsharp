@@ -11,30 +11,9 @@ open Utilities
 open GrowOnlyCounter
 open System.Threading.Tasks
 
+open Utilities
 
 let semaphore: SemaphoreSlim = new SemaphoreSlim(1)
-
-let repeatSchedule (timerInterval: TimeSpan) (nodeRef: ref<Node>) : Task<unit> =
-    let mutable lastAction = DateTimeOffset.Now
-    task {
-        while true do
-            let now = DateTimeOffset.Now
-            if now < lastAction + timerInterval then
-                do! Task.Delay (lastAction + timerInterval - now)
-            lastAction <- DateTimeOffset.Now
-
-            do! semaphore.WaitAsync ()
-            let (node', messages) = transition nodeRef.Value (Choice2Of2 ())
-            nodeRef.Value <- node'
-            messages
-            |> List.iter (fun msg ->
-                let json = toJsonText msg
-                printfn $"{json}"
-                eprintfn $"STDOUT: {json}"
-            )
-            semaphore.Release () |> ignore
-    }
-
 
 let rec processStdin (nodeRef: ref<Node>) : Task<unit> =
     task {
@@ -82,7 +61,11 @@ let main args =
             }
     let task1 = processStdin nodeRef
     let async1 = task1 |> Async.AwaitTask
-    let task2 = repeatSchedule (TimeSpan.FromMilliseconds 100) nodeRef
+    let task2 = repeatSchedule
+                    (TimeSpan.FromMilliseconds 100)
+                    (nodeRef, semaphore)
+                    (fun _ -> ())
+                    transition
     let async2 = task2 |> Async.AwaitTask
     [| async2; async1 |]
     |> Async.Parallel
