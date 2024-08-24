@@ -9,6 +9,7 @@
         <Compile Include="Initializer.fs" />
         <Compile Include="TimerProcessor.fs" />
         <Compile Include="InputProcessor.fs" />
+        <Compile Include="TopologyGenerator.fs" />
     </ItemGroup>
 
     <ItemGroup>
