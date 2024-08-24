@@ -30,3 +30,24 @@ We introduce `gossip` rpc in this solution. A gossip rpc contains list of messag
 
 One optimization is that gossip will not include messages that are already reliable sent to the neighbour.
 
+# Challenge #3d: Efficient Multi node broadcast part 1
+There are 25 nodes, we can't use more than 30 `gossip`/`gossip_ok` operation for each broadcast/read rpc.
+
+Also this workload introduce network delay, so each message will take 100ms to reach destination. Stable latency is calculated as time difference between the time when message was broadcasted to the cluster and the time when the message was last missing from any node after the broeadcast. We need to keep median stable latency below 400ms and max stable latency below 600ms.
+
+Now we will batch the gossip rpc to minimize messages per opration. We will run a timer for 40ms and send new messages to other nodes via gossip rpc. We will face network delay of 100ms, so ideally we will need to wait 200ms to get `gossip_ok` response. So we will remove pending ack messages after 240ms. That means after 240ms we can retry the gossip rpc for that message. Here one optimization we introduced is that we will still keep track of timed out pending messages and allow `gossip_ok` response for those messages.
+
+Since we are running timer for 40ms apart, we will be sending frequent gossip rpc. That will increase messages per opration. So we will not send gossip to neighbour if we already sent two gossip rpc and waiting for `gossip_ok`. Also when we send the second gossip rpc alongside an existing pending gossip rpc, we make sure that number of new messages must be at least 3/4th of the number of messages in the first gossip rpc. This way we try to minimize the number of messages per operations maintaining fault tolerance.
+
+Now for minimizing stable latency, we will form topology by as follows.
+We split 25 nodes into 5 groups of 5 nodes each. Each node will have 4 neighbours in its group. Now we form another 5 group by taking one node from each group. So each node will have 4 neighbours in other groups. In total we have 8 neighbours for each node. Groups are formed in a way that every two nodes will be within 2 hops of each other.
+
+Say we receaved a new broadcast message to a node. It will take 100ms to reach to all 8 neighbours, and another 100ms to reach to all other nodes. So ideally stable lateny should be 200ms.But we don't always send the `gossip` rpc as soon as a message is seen. After all of these optimization we could achive max stable latency ~500ms and median stable latency ~300ms and messages per operation ~28.
+
+
+# Challenge #3e: Efficient Multi node broadcast part 2
+Here we need to further optimize message per operation below 20. But median stable latency can be within 1000ms and max stable latency can be within 2000ms.
+
+Our solution is same as previous but here we run the timer 150ms apart. So we will be sending less frequent gossip rpc.
+
+Our solution could achive max stable latency ~600ms and median stable latency ~360ms and messages per operation ~17.
