@@ -41,6 +41,8 @@ Since we are running timer for 40ms apart, we will be sending frequent gossip rp
 
 Now for minimizing stable latency, we will form topology by as follows.
 We split 25 nodes into 5 groups of 5 nodes each. Each node will have 4 neighbours in its group. Now we form another 5 group by taking one node from each group. So each node will have 4 neighbours in other groups. In total we have 8 neighbours for each node. Groups are formed in a way that every two nodes will be within 2 hops of each other.
+For better understanding a topology with 16 nodes is shown below:
+![topology](./attachments/images/topology-16.jpg)
 
 Say we receaved a new broadcast message to a node. It will take 100ms to reach to all 8 neighbours, and another 100ms to reach to all other nodes. So ideally stable lateny should be 200ms.But we don't always send the `gossip` rpc as soon as a message is seen. After all of these optimization we could achive max stable latency ~500ms and median stable latency ~300ms and messages per operation ~28.
 
