@@ -41,7 +41,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
                 offsets
                 |> Map.choosei (fun key offset ->
                     node.Messages.TryFind key
-                    |> Option.map(Map.toList >> List.filter (fun (offset', _) -> offset <= offset'))
+                    |> Option.map (Map.toList >> List.filter (fun (offset', _) -> offset <= offset'))
                 )
             let replyMessageBody: OutputMessageBody =
                 PollAck (messageId, messages)
@@ -61,17 +61,25 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
                     Destination = msg.Source
                     MessageBody = replyMessageBody
                 }
+            let node =
+                {
+                    node with
+                        CommittedOffsets =
+                            (node.CommittedOffsets, offsets)
+                            ||> Map.fold (fun acc key offset ->
+                                match acc.TryFind key with
+                                | Some offset' -> acc.Add (key, max offset offset')
+                                | None -> acc.Add (key, offset)
+                            )
+                }
             (node, [ replyMessage ])
         | InputMessageBody.ListCommittedOffsets(messageId, keys) ->
             let offsets =
                 keys
                 |> NonEmptyList.toList
                 |> List.choose (fun key ->
-                    node.Messages.TryFind key
-                    |> Option.map (fun logs ->
-                        let offset = Offset logs.Count
-                        (key, offset)
-                    )
+                    node.CommittedOffsets.TryFind key
+                    |> Option.map (fun offset -> (key, offset))
                 )
                 |> Map.ofList
             let replyMessageBody: OutputMessageBody =

@@ -100,4 +100,5 @@ with
 type Node = {
     Info : InitialNodeInfo
     Messages: Map<LogKey, Map<Offset, LogValue>>
+    CommittedOffsets: Map<LogKey, Offset>
 }

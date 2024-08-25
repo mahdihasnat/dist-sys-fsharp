@@ -22,6 +22,7 @@ let main args =
             {
                 Info = nodeInfo
                 Messages = Map.empty
+                CommittedOffsets = Map.empty
             }
     let task1 = processStdin
                     (nodeRef, semaphore)
