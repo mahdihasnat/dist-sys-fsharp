@@ -10,7 +10,7 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Utilities", "Utilities\Util
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Broadcast", "Broadcast\Broadcast.fsproj", "{C1781EAC-3447-47CF-99F6-50F913059A77}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "GrowOnlyCounter", "GrowOnlyCounter\GrowOnlyCounter.fsproj", "{A89CEABF-CFC3-4907-8552-B7A8AC01271E}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "GrowOnlyCounterUsingBroadcast", "GrowOnlyCounterUsingBroadcast\GrowOnlyCounterUsingBroadcast.fsproj", "{A89CEABF-CFC3-4907-8552-B7A8AC01271E}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Kafka", "Kafka\Kafka.fsproj", "{E5330101-04F5-4113-AC13-2EC88ADC7206}"
 EndProject
