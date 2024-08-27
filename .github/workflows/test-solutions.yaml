@@ -39,7 +39,7 @@ jobs:
                     dotnet publish ./Echo/Echo.fsproj --no-self-contained -o ./bin/Echo/
                     dotnet publish ./UniqueIdGen/UniqueIdGen.fsproj --no-self-contained -o ./bin/UniqueIdGen/
                     dotnet publish ./Broadcast/Broadcast.fsproj --no-self-contained -o ./bin/Broadcast/
-                    dotnet publish ./GrowOnlyCounter/GrowOnlyCounter.fsproj --no-self-contained -o ./bin/GrowOnlyCounter/
+                    dotnet publish ./GrowOnlyCounterFtBroadcast/GrowOnlyCounterFtBroadcast.fsproj --no-self-contained -o ./bin/GrowOnlyCounterFtBroadcast/
                     dotnet publish ./Kafka/Kafka.fsproj --no-self-contained -o ./bin/Kafka/
 
             -   name: Test Echo challenge
@@ -69,7 +69,7 @@ jobs:
                     python ./.github/scripts/checker_task_3.py --msgs-per-op 20 --median-latency 1000 --max-latency 2000
 
             -   name: Test Grow Only Counter
-                run: ./maelstrom/maelstrom test -w g-counter --bin ./bin/GrowOnlyCounter/GrowOnlyCounter --node-count 3 --rate 100 --time-limit 20 --nemesis partition >> /dev/null
+                run: ./maelstrom/maelstrom test -w g-counter --bin ./bin/GrowOnlyCounterFtBroadcast/GrowOnlyCounterFtBroadcast --node-count 3 --rate 100 --time-limit 20 --nemesis partition >> /dev/null
 
             -   name: Test Single node Kafka style log
                 run: ./maelstrom/maelstrom test -w kafka --bin ./bin/Kafka/Kafka --node-count 1 --concurrency 2n --time-limit 20 --rate 1000 >> /dev/null
