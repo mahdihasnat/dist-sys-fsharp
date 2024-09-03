@@ -68,8 +68,11 @@ jobs:
                     ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 150 >> /dev/null
                     python ./.github/scripts/checker_task_3.py --msgs-per-op 20 --median-latency 1000 --max-latency 2000
 
-            -   name: Test Grow Only Counter
+            -   name: Test Grow Only Counter Ft Broadcast
                 run: ./maelstrom/maelstrom test -w g-counter --bin ./bin/GrowOnlyCounterFtBroadcast/GrowOnlyCounterFtBroadcast --node-count 3 --rate 100 --time-limit 20 --nemesis partition >> /dev/null
+
+            -   name: Test Grow Only Counter Ft SeqKV
+                run: ./maelstrom/maelstrom test -w g-counter --bin ./bin/GrowOnlyCounterFtSeqKV/GrowOnlyCounterFtSeqKV --node-count 3 --rate 100 --time-limit 20 --nemesis partition >> /dev/null
 
             -   name: Test Single node Kafka style log
                 run: ./maelstrom/maelstrom test -w kafka --bin ./bin/Kafka/Kafka --node-count 1 --concurrency 2n --time-limit 20 --rate 1000 >> /dev/null
