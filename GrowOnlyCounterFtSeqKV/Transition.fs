@@ -48,6 +48,18 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
     | Choice1Of2 msg ->
         match msg.MessageBody with
         | Add(messageId, delta) ->
+            let onSeqKVCompareAndSwapOk =
+                fun (node: Node) ->
+                    let outputMessageBody: OutputMessageBody =
+                        AddAck(messageId)
+                    let outputMessage =
+                        {
+                            Source = node.Info.NodeId
+                            Destination = msg.Source
+                            MessageBody = outputMessageBody
+                        }
+                    node, [outputMessage]
+
             let rec addHandler node value : Node * List<Message<OutputMessageBody>> =
                 let newValue = value + delta
                 let (node, updateMessageId: MessageId) = genMessageId node
@@ -59,17 +71,6 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                         Destination = NodeId.SeqKv
                         MessageBody = updateMessageBody
                     }
-                let onSeqKVCompareAndSwapOk =
-                    fun (node: Node) ->
-                        let outputMessageBody: OutputMessageBody =
-                            AddAck(messageId)
-                        let outputMessage =
-                            {
-                                Source = node.Info.NodeId
-                                Destination = msg.Source
-                                MessageBody = outputMessageBody
-                            }
-                        node, [outputMessage]
 
                 let onSeqKVCompareAndSwapPreconditionFailed =
                     fun (node: Node) (value: Value) ->
@@ -82,8 +83,10 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                             OnSeqKVCompareAndSwapPreconditionFailedHandlers = node.OnSeqKVCompareAndSwapPreconditionFailedHandlers.Add(updateMessageId, onSeqKVCompareAndSwapPreconditionFailed)
                     }
                 node, [updateMessage]
-
-            withSeqKvRead node addHandler
+            if delta = Delta 0 then
+                onSeqKVCompareAndSwapOk node
+            else
+                withSeqKvRead node addHandler
 
         | Read messageId ->
             withSeqKvRead node (fun node value ->
