@@ -48,11 +48,11 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
     | Choice1Of2 msg ->
         match msg.MessageBody with
         | Add(messageId, delta) ->
-            let rec addHandler node : Node * List<Message<OutputMessageBody>> =
-                let newValue = node.ValueCache + delta
+            let rec addHandler node value : Node * List<Message<OutputMessageBody>> =
+                let newValue = value + delta
                 let (node, updateMessageId: MessageId) = genMessageId node
                 let updateMessageBody: OutputMessageBody =
-                    SeqKVCompareAndSwap (updateMessageId, "sum", node.ValueCache, newValue, node.ValueCache = Value 0)
+                    SeqKVCompareAndSwap (updateMessageId, "sum", value, newValue, value = Value 0)
                 let updateMessage =
                     {
                         Source = node.Info.NodeId
@@ -61,11 +61,6 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                     }
                 let onSeqKVCompareAndSwapOk =
                     fun (node: Node) ->
-                        let node =
-                            {
-                                node with
-                                    ValueCache = newValue
-                            }
                         let outputMessageBody: OutputMessageBody =
                             AddAck(messageId)
                         let outputMessage =
@@ -78,12 +73,7 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
 
                 let onSeqKVCompareAndSwapPreconditionFailed =
                     fun (node: Node) (value: Value) ->
-                        let node =
-                            {
-                                node with
-                                    ValueCache = value
-                            }
-                        addHandler node
+                        addHandler node value
 
                 let node =
                     {
@@ -93,18 +83,20 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                     }
                 node, [updateMessage]
 
-            addHandler node
+            withSeqKvRead node addHandler
 
         | Read messageId ->
-            let outputMessageBody: OutputMessageBody =
-                ReadAck(messageId, node.ValueCache)
-            let outputMessage =
-                {
-                    Source = node.Info.NodeId
-                    Destination = msg.Source
-                    MessageBody = outputMessageBody
-                }
-            node, [outputMessage]
+            withSeqKvRead node (fun node value ->
+                let outputMessageBody: OutputMessageBody =
+                    ReadAck(messageId, value)
+                let outputMessage =
+                    {
+                        Source = node.Info.NodeId
+                        Destination = msg.Source
+                        MessageBody = outputMessageBody
+                    }
+                node, [outputMessage])
+
         | OnSeqKVReadOk(inReplyTo, value) ->
             node.OnSeqKVReadOkHandlers
             |> Map.tryFind inReplyTo
