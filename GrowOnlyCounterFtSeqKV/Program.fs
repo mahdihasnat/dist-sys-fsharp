@@ -40,7 +40,15 @@ let main args =
     let task1 = processStdin
                     (nodeRef, semaphore)
                     transition
-    task1
-    |> Async.AwaitTask
+
+    let task2 = repeatSchedule
+                    (TimeSpan.FromSeconds 0.4)
+                    (nodeRef, semaphore)
+                    (fun _node -> ())
+                    transition
+    [| task1; task2 |]
+    |> Array.map Async.AwaitTask
+    |> Async.Parallel
     |> Async.RunSynchronously
+    |> ignore
     0

@@ -44,7 +44,14 @@ let withSeqKvRead node (f : Node -> Value -> Node * List<Message<OutputMessageBo
 let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : Node * List<Message<OutputMessageBody>> =
     match action with
     | Choice2Of2 unit ->
-        (node, [])
+        withSeqKvRead node (fun node value ->
+            let node =
+                {
+                    node with
+                        ValueCache = value
+                }
+            (node, [])
+        )
     | Choice1Of2 msg ->
         match msg.MessageBody with
         | Add(messageId, delta) ->
