@@ -31,6 +31,7 @@ let main args =
             {
                 Info = nodeInfo
                 NextMessageId = 0
+                ValueCache = Value 0
                 OnSeqKVReadOkHandlers = Map.empty
                 OnSeqKVReadKeyDoesNotExistHandlers = Map.empty
                 OnSeqKVCompareAndSwapOkHandlers = Map.empty
