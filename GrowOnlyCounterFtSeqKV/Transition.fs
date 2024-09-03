@@ -52,7 +52,7 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                 let newValue = node.ValueCache + delta
                 let (node, updateMessageId: MessageId) = genMessageId node
                 let updateMessageBody: OutputMessageBody =
-                    SeqKVCompareAndSwap (updateMessageId, "sum", node.ValueCache, newValue, true)
+                    SeqKVCompareAndSwap (updateMessageId, "sum", node.ValueCache, newValue, node.ValueCache = Value 0)
                 let updateMessage =
                     {
                         Source = node.Info.NodeId
