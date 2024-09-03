@@ -40,6 +40,7 @@ jobs:
                     dotnet publish ./UniqueIdGen/UniqueIdGen.fsproj --no-self-contained -o ./bin/UniqueIdGen/
                     dotnet publish ./Broadcast/Broadcast.fsproj --no-self-contained -o ./bin/Broadcast/
                     dotnet publish ./GrowOnlyCounterFtBroadcast/GrowOnlyCounterFtBroadcast.fsproj --no-self-contained -o ./bin/GrowOnlyCounterFtBroadcast/
+                    dotnet publish ./GrowOnlyCounterFtSeqKV/GrowOnlyCounterFtSeqKV.fsproj --no-self-contained -o ./bin/GrowOnlyCounterFtSeqKV/
                     dotnet publish ./Kafka/Kafka.fsproj --no-self-contained -o ./bin/Kafka/
 
             -   name: Test Echo challenge
