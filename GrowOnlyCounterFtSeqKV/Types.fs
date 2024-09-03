@@ -82,7 +82,7 @@ with
         codec {
             let! msgType = jreqAlways "type" (function | AddAck _ -> "add_ok" | ReadAck _ -> "read_ok" | SeqKVRead _ -> "read" | SeqKVCompareAndSwap _ -> "cas")
             and! messageId = jopt "msg_id" (function | SeqKVRead (messageId, _) | SeqKVCompareAndSwap (messageId, _, _, _, _)  -> Some messageId| _ -> None)
-            and! inReplyTo = jopt "in_reply_to" (function | ReadAck (inReplyTo, _) -> Some inReplyTo | _ -> None)
+            and! inReplyTo = jopt "in_reply_to" (function | AddAck inReplyTo | ReadAck (inReplyTo, _) -> Some inReplyTo | _ -> None)
             and! value = jopt "value" (function | ReadAck (_, value) -> Some value | _ -> None)
             and! key = jopt "key" (function | SeqKVRead (_, key) | SeqKVCompareAndSwap (_, key, _, _, _) -> Some key | _ -> None)
             and! from = jopt "from" (function | SeqKVCompareAndSwap (_, _, from, _, _) -> Some from | _ -> None)
