@@ -42,7 +42,7 @@ let main args =
                     transition
 
     let task2 = repeatSchedule
-                    (TimeSpan.FromSeconds 0.4)
+                    (TimeSpan.FromMilliseconds 2000)
                     (nodeRef, semaphore)
                     (fun _node -> ())
                     transition
