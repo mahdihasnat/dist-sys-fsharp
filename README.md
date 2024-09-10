@@ -54,9 +54,17 @@ Our solution is same as previous but here we run the timer 150ms apart. So we wi
 
 Our solution could achive max stable latency ~600ms and median stable latency ~360ms and messages per operation ~17.
 
-# Challenge #4: Grow-Only Counter
+# Challenge #4: Grow-Only Counter with broadcast
 We will face add rpc to any node, that will increment the counter. Read rpc will return the current counter value.
 
 This challenge comes with a go library `seq-kv` that will implement sequential key value store on the cluster. But we are solving this problem in `F#` language. So we don't have access to the provided library.
 
 It turns out that if we generate a unique id at time time of receiving a `add` rpc, and consider this addition as a broadcast message, we can solve this problem using the solution of Challenge #3. When we get the `read` rpc, we will just accumulate the value by looking at the messages we have seen so far.
+
+# Challenge #4: Grow-Only Counter with seq-kv
+`seq-kv` is just another node that our node can talk to. We can send `read`, `cas`, `write` rpc to the store node.
+I stored global counter at the store with key `sum`.
+
+For read queries, node will get latest sum from the store and reply to client. For add updates, node will get the latest sum from the store and do compare and swap operation to update the sum. If cas operation fails, node will retry the operation with updated value.
+
+One obvious optimization to reduce the number of messages is to maintain a local cache of the sum value. So for the read operation, node don't need to query the store every time. And for the add operation, node will directly do cas operation with the local cache value. Also we need to update the cache say every 2 seconds.
