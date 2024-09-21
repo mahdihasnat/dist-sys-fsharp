@@ -70,38 +70,51 @@ with
                     failwithf $"Invalid message type: %s{msgType}"
 
         }
-        |> ofObjCodec
+        |> ofObjCodec        
+
+[<RequireQualifiedAccess>]
+type KVOutputMessageBody<'Value> =
+    | Read of MessageId * Key: string
+    | CompareAndSwap of MessageId * Key: string * From: 'Value * To: 'Value * CreateIfNotExists: bool
+with
+    static member inline ToJson (x: KVOutputMessageBody<_>) =
+            match x with
+            | KVOutputMessageBody.Read (messageId, key) ->
+                jobj [
+                    "type" .= "read"
+                    "msg_id" .= messageId
+                    "key" .= key
+                ]
+            | KVOutputMessageBody.CompareAndSwap (messageId, key, from, ``to``, createIfNotExists) ->
+                jobj [
+                    "type" .= "cas"
+                    "msg_id" .= messageId
+                    "key" .= key
+                    "from" .= from
+                    "to" .= ``to``
+                    "create_if_not_exists" .= createIfNotExists
+                ]
 
 type OutputMessageBody =
     | AddAck of InReplyTo: MessageId
     | ReadAck of InReplyTo: MessageId * Value
-    | SeqKVRead of MessageId * Key: string
-    | SeqKVCompareAndSwap of MessageId * Key: string * From: Value * To :Value * CreateIfNotExists: bool
+    | SeqKVOperation of KVOutputMessageBody<Value>
 with
-    static member get_Codec () =
-        codec {
-            let! msgType = jreqAlways "type" (function | AddAck _ -> "add_ok" | ReadAck _ -> "read_ok" | SeqKVRead _ -> "read" | SeqKVCompareAndSwap _ -> "cas")
-            and! messageId = jopt "msg_id" (function | SeqKVRead (messageId, _) | SeqKVCompareAndSwap (messageId, _, _, _, _)  -> Some messageId| _ -> None)
-            and! inReplyTo = jopt "in_reply_to" (function | AddAck inReplyTo | ReadAck (inReplyTo, _) -> Some inReplyTo | _ -> None)
-            and! value = jopt "value" (function | ReadAck (_, value) -> Some value | _ -> None)
-            and! key = jopt "key" (function | SeqKVRead (_, key) | SeqKVCompareAndSwap (_, key, _, _, _) -> Some key | _ -> None)
-            and! from = jopt "from" (function | SeqKVCompareAndSwap (_, _, from, _, _) -> Some from | _ -> None)
-            and! ``to`` = jopt "to" (function | SeqKVCompareAndSwap (_, _, _, ``to``, _) -> Some ``to`` | _ -> None)
-            and! createIfNotExists = jopt "create_if_not_exists" (function | SeqKVCompareAndSwap (_, _, _, _, createIfNotExists) -> Some createIfNotExists | _ -> None)
-            return
-                match msgType with
-                | s when s = "add_ok" ->
-                    AddAck (inReplyTo |> Option.get)
-                | s when s = "read_ok" ->
-                    ReadAck (inReplyTo |> Option.get, value |> Option.get)
-                | s when s = "read" ->
-                    SeqKVRead (messageId |> Option.get, key |> Option.get)
-                | s when s = "cas" ->
-                    SeqKVCompareAndSwap (messageId |> Option.get, key |> Option.get, from |> Option.get, ``to`` |> Option.get, createIfNotExists |> Option.get)
-                | _ ->
-                    failwithf $"Invalid message type: %s{msgType}"
-        }
-        |> ofObjCodec
+    static member inline ToJson (x: OutputMessageBody) =
+            match x with
+            | AddAck inReplyTo ->
+                jobj [
+                    "type" .= "add_ok"
+                    "in_reply_to" .= inReplyTo
+                ]
+            | ReadAck (inReplyTo, value) ->
+                jobj [
+                    "type" .= "read_ok"
+                    "in_reply_to" .= inReplyTo
+                    "value" .= value
+                ]
+            | SeqKVOperation x ->
+                KVOutputMessageBody<_>.ToJson x
 
 type Node = {
     Info: InitialNodeInfo

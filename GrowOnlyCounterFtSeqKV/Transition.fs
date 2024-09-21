@@ -19,7 +19,7 @@ let genMessageId (node: Node) : Node * MessageId =
 let withSeqKvRead node (f : Node -> Value -> Node * List<Message<OutputMessageBody>>) : Node * List<Message<OutputMessageBody>> =
     let node, queryMessageId = genMessageId node
     let seqKVReadMessageBody: OutputMessageBody =
-        SeqKVRead(queryMessageId, "sum")
+        SeqKVOperation (KVOutputMessageBody.Read (queryMessageId, "sum"))
     let seqKVReadMessage =
         {
             Source = node.Info.NodeId
@@ -76,7 +76,7 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                 let newValue = node.ValueCache + delta
                 let (node, updateMessageId: MessageId) = genMessageId node
                 let updateMessageBody: OutputMessageBody =
-                    SeqKVCompareAndSwap (updateMessageId, "sum", node.ValueCache, newValue, node.ValueCache = Value 0)
+                    SeqKVOperation (KVOutputMessageBody.CompareAndSwap (updateMessageId, "sum", node.ValueCache, newValue, node.ValueCache = Value 0))
                 let updateMessage =
                     {
                         Source = node.Info.NodeId

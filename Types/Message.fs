@@ -61,3 +61,10 @@ with
             }
         }
         |> ofObjCodec
+    
+    static member inline ToJson (x: Message<_>) =
+        jobj [
+            "src" .= x.Source
+            "dest" .= x.Destination
+            "body" .= x.MessageBody
+        ]
