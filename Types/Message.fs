@@ -3,6 +3,7 @@ module Types.Message
 
 open Fleece
 open FSharpPlus.Data
+open FSharpPlus
 
 type MessageId = MessageId of int
 with
@@ -68,3 +69,20 @@ with
             "dest" .= x.Destination
             "body" .= x.MessageBody
         ]
+        
+    static member inline OfJson json =
+        match json with
+        | JObject o ->
+            monad {
+                let! src = jget o "src"
+                and! dest = jget o "dest"
+                and! body = jget o "body"
+                return
+                    {
+                        Source = src
+                        Destination = dest
+                        MessageBody = body
+                    }
+            }
+        | x ->
+            Decode.Fail.objExpected x

@@ -8,7 +8,6 @@ open Microsoft.FSharp.Core
 open Types
 open GrowOnlyCounter
 
-
 let genMessageId (node: Node) : Node * MessageId =
     {
         node with
@@ -19,7 +18,7 @@ let genMessageId (node: Node) : Node * MessageId =
 let withSeqKvRead node (f : Node -> Value -> Node * List<Message<OutputMessageBody>>) : Node * List<Message<OutputMessageBody>> =
     let node, queryMessageId = genMessageId node
     let seqKVReadMessageBody: OutputMessageBody =
-        SeqKVOperation (KVOutputMessageBody.Read (queryMessageId, "sum"))
+        SeqKVOperation (KVRequestMessageBody.Read (queryMessageId, "sum"))
     let seqKVReadMessage =
         {
             Source = node.Info.NodeId
@@ -60,7 +59,7 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                     let node =
                             {
                                 node with
-                                    ValueCache = node.ValueCache + delta
+                                    ValueCache = delta + node.ValueCache
                             }
                     let outputMessageBody: OutputMessageBody =
                         AddAck(messageId)
@@ -73,10 +72,10 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                     node, [outputMessage]
 
             let rec addHandler node : Node * List<Message<OutputMessageBody>> =
-                let newValue = node.ValueCache + delta
+                let newValue = delta + node.ValueCache
                 let (node, updateMessageId: MessageId) = genMessageId node
                 let updateMessageBody: OutputMessageBody =
-                    SeqKVOperation (KVOutputMessageBody.CompareAndSwap (updateMessageId, "sum", node.ValueCache, newValue, node.ValueCache = Value 0))
+                    SeqKVOperation (KVRequestMessageBody.CompareAndSwap (updateMessageId, "sum", node.ValueCache, newValue, node.ValueCache = Value 0))
                 let updateMessage =
                     {
                         Source = node.Info.NodeId
@@ -113,14 +112,14 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                     MessageBody = outputMessageBody
                 }
             node, [outputMessage]
-        | OnSeqKVReadOk(inReplyTo, value) ->
+        | KVResponse (KVResponseMessageBody.ReadOk(inReplyTo, value)) ->
             node.OnSeqKVReadOkHandlers
             |> Map.tryFind inReplyTo
             |> Option.get
             |> (fun f ->
                 f node value
             )
-        | OnSeqKVReadKeyDoesNotExist inReplyTo ->
+        | KVResponse (KVResponseMessageBody.ErrorKeyDoesNotExist inReplyTo) ->
             node.OnSeqKVReadKeyDoesNotExistHandlers
             |> Map.tryFind inReplyTo
             |> Option.get
@@ -128,7 +127,7 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                 f node
             )
 
-        | OnSeqKVCompareAndSwapOk inReplyTo ->
+        | KVResponse (KVResponseMessageBody.CompareAndSwapOk inReplyTo) ->
             node.OnSeqKVCompareAndSwapOkHandlers
             |> Map.tryFind inReplyTo
             |> Option.get
@@ -136,7 +135,7 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                 f node
             )
 
-        | OnSeqKVCompareAndSwapPreconditionFailed (inReplyTo, updatedValue) ->
+        | KVResponse (KVResponseMessageBody.ErrorPreconditionFailed(inReplyTo, updatedValue)) ->
             node.OnSeqKVCompareAndSwapPreconditionFailedHandlers
             |> Map.tryFind inReplyTo
             |> Option.get
