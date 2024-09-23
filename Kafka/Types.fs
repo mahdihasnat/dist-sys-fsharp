@@ -116,7 +116,7 @@ type Node = {
     Info : InitialNodeInfo
     NextMessageId: int
 
-    CachedMessages: Map<LogKey, Map<Offset, LogValue>>
+    CachedMessages: Map<LogKey, List<Offset * LogValue>>
     CachedCommittedOffsets: Map<LogKey, Offset>
 
     OnKVReadOkHandlers : Map<MessageId, Node -> Value -> TransitionResult>

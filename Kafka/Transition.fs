@@ -19,6 +19,40 @@ let genMessageId (node: Node) : Node * MessageId =
     },
     MessageId node.NextMessageId
 
+
+let refreshLog (logKey: LogKey) node (f : Node -> TransitionResult) : TransitionResult =
+    let rec refreshLogsNext (node: Node) (f : Node -> TransitionResult) : TransitionResult =
+        let node, queryMessageId = genMessageId node
+        let nextOffset =
+            match node.CachedMessages.TryFind logKey with
+            | None -> Offset 0
+            | Some messages ->
+                    Offset messages.Length
+        let seqKVReadLogMessageBody: OutputMessageBody =
+            KVRequest (KVRequestMessageBody.Read (queryMessageId, logIndex logKey nextOffset))
+        let seqKVReadLogMessage =
+            {
+                Source = node.Info.NodeId
+                Destination = NodeId.SeqKv
+                MessageBody = seqKVReadLogMessageBody
+            }
+        let node = node.RegisterReadOkHandler queryMessageId (fun node (Value value) ->
+            let updatedLogs = (nextOffset, LogValue value) :: (node.CachedMessages.TryFind logKey |> Option.defaultValue List.empty)
+            let node = { node with CachedMessages = node.CachedMessages.Add(logKey, updatedLogs) }
+            refreshLogsNext node f
+        )
+        let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node ->
+            f node
+        )
+        node, [seqKVReadLogMessage]
+    refreshLogsNext node f
+
+let rec refreshLogs (logKeys: List<LogKey>) node (f : Node -> TransitionResult) : TransitionResult =
+    match logKeys with
+    | [] -> f node
+    | x :: xs ->
+        refreshLog x node (fun node -> refreshLogs xs node f)
+
 let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : TransitionResult =
 
     match action with
@@ -86,21 +120,24 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
             node, [linKVReadMessage]
 
         | InputMessageBody.Poll (messageId, offsets) ->
-            let messages : Map<LogKey, List<Offset * LogValue>> =
-                offsets
-                |> Map.choosei (fun key offset ->
-                    node.CachedMessages.TryFind key
-                    |> Option.map (Map.toList >> List.filter (fun (offset', _) -> offset <= offset'))
-                )
-            let replyMessageBody: OutputMessageBody =
-                PollAck (messageId, messages)
-            let replyMessage: Message<OutputMessageBody> =
-                {
-                    Source = node.Info.NodeId
-                    Destination = msg.Source
-                    MessageBody = replyMessageBody
-                }
-            (node, [ replyMessage ])
+
+            let onRefreshLogsCompleted node : TransitionResult =
+                let messages: Map<LogKey, List<Offset * LogValue>> =
+                    offsets
+                    |> Map.choosei (fun key offset ->
+                        node.CachedMessages.TryFind key
+                        |> Option.map (List.filter (fun (offset', _) -> offset <= offset'))
+                    )
+                let replyMessageBody: OutputMessageBody =
+                    PollAck (messageId, messages)
+                let replyMessage: Message<OutputMessageBody> =
+                    {
+                        Source = node.Info.NodeId
+                        Destination = msg.Source
+                        MessageBody = replyMessageBody
+                    }
+                (node, [ replyMessage ])
+            refreshLogs (offsets.Keys |> List.ofSeq) node onRefreshLogsCompleted
         | InputMessageBody.CommitOffsets(messageId, offsets) ->
             let replyMessageBody: OutputMessageBody =
                 CommitOffsetsAck (messageId)
