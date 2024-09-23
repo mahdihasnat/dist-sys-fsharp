@@ -13,6 +13,7 @@ with
 
 module NodeId =
     let SeqKv = NodeId "seq-kv"
+    let LinKv = NodeId "lin-kv"
 
 type InitialNodeInfo = {
     NodeId : NodeId

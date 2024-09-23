@@ -9,38 +9,87 @@ open Microsoft.FSharp.Core
 open Types
 open Kafka
 
+let logIndex (key: LogKey) (offset: Offset) : string =
+    $"{key.Value}-{offset.Value}"
 
-let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : Node * List<Message<OutputMessageBody>> =
+let genMessageId (node: Node) : Node * MessageId =
+    {
+        node with
+            NextMessageId = node.NextMessageId + 1
+    },
+    MessageId node.NextMessageId
+
+let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : TransitionResult =
 
     match action with
     | Choice2Of2 unit ->
-        (node, [])
+        (node, List.empty)
     | Choice1Of2 msg ->
         match msg.MessageBody with
         | InputMessageBody.Send(messageId, key, value) ->
-            let logs = node.Messages.TryFind key |> Option.defaultValue Map.empty
-            let offset = Offset logs.Count
-            let logs =
-                logs.Add (offset, value)
-            let node =
-                {
-                    node with
-                        Messages = node.Messages.Add (key, logs)
-                }
-            let replyMessageBody: OutputMessageBody =
-                SendAck (messageId, offset)
-            let replyMessage: Message<OutputMessageBody> =
+            // read current offset from lin-kv
+            // increment current offsets from lin-kv
+            // write log value to seq-kv
+            let writeLogOkHandler (node: Node) (offset: Offset) : TransitionResult =
+                let sendOkReplyMessageBody =
+                    OutputMessageBody.SendAck (messageId, offset)
+                let sendOkReplyMessage =
+                    {
+                        Source = node.Info.NodeId
+                        Destination = msg.Source
+                        MessageBody = sendOkReplyMessageBody
+                    }
+                node, [sendOkReplyMessage]
+
+            let incrementOffsetOkHandler (node: Node) (offset: Offset) : TransitionResult =
+                let node, writeLogMessageId = genMessageId node
+                let seqKVWriteMessageBody: OutputMessageBody =
+                    KVRequest (KVRequestMessageBody.CompareAndSwap (writeLogMessageId, logIndex key offset, Value 0, Value value.Value, true))
+                let seqKVWriteMessage =
+                    {
+                        Source = node.Info.NodeId
+                        Destination = NodeId.SeqKv
+                        MessageBody = seqKVWriteMessageBody
+                    }
+                let node = node.RegisterCompareAndSwapOkHandler writeLogMessageId (fun node -> writeLogOkHandler node offset)
+                node, [seqKVWriteMessage]
+
+            let rec latestOffsetReadOkHandler (node: Node) (Offset offset) : TransitionResult =
+                let nextOffset = Offset (offset + 1)
+                let node, updateMessageId = genMessageId node
+                let linKVWriteMessageBody: OutputMessageBody =
+                    KVRequest (KVRequestMessageBody.CompareAndSwap (updateMessageId, key.Value, Value offset, Value nextOffset.Value, nextOffset.Value = 0))
+                let linKVWriteMessage =
+                    {
+                        Source = node.Info.NodeId
+                        Destination = NodeId.LinKv
+                        MessageBody = linKVWriteMessageBody
+                    }
+                let node = node.RegisterCompareAndSwapOkHandler updateMessageId (fun node -> incrementOffsetOkHandler node nextOffset)
+                let node = node.RegisterErrorPreconditionFailedHandler updateMessageId (fun node (Value actualValue) -> latestOffsetReadOkHandler node (Offset (actualValue + 1)))
+                node, [linKVWriteMessage]
+
+
+            let node, queryMessageId = genMessageId node
+            let linKVReadMessageBody: OutputMessageBody =
+                KVRequest (KVRequestMessageBody.Read (queryMessageId, key.Value))
+            let linKVReadMessage =
                 {
                     Source = node.Info.NodeId
-                    Destination = msg.Source
-                    MessageBody = replyMessageBody
+                    Destination = NodeId.LinKv
+                    MessageBody = linKVReadMessageBody
                 }
-            (node, [ replyMessage ])
+            let onReadOk (node: Node) (Value value) : TransitionResult =
+                latestOffsetReadOkHandler node (Offset value)
+            let node = node.RegisterReadOkHandler queryMessageId onReadOk
+            let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node -> latestOffsetReadOkHandler node (Offset -1))
+            node, [linKVReadMessage]
+
         | InputMessageBody.Poll (messageId, offsets) ->
             let messages : Map<LogKey, List<Offset * LogValue>> =
                 offsets
                 |> Map.choosei (fun key offset ->
-                    node.Messages.TryFind key
+                    node.CachedMessages.TryFind key
                     |> Option.map (Map.toList >> List.filter (fun (offset', _) -> offset <= offset'))
                 )
             let replyMessageBody: OutputMessageBody =
@@ -64,8 +113,8 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
             let node =
                 {
                     node with
-                        CommittedOffsets =
-                            (node.CommittedOffsets, offsets)
+                        CachedCommittedOffsets =
+                            (node.CachedCommittedOffsets, offsets)
                             ||> Map.fold (fun acc key offset ->
                                 match acc.TryFind key with
                                 | Some offset' -> acc.Add (key, max offset offset')
@@ -78,7 +127,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
                 keys
                 |> NonEmptyList.toList
                 |> List.choose (fun key ->
-                    node.CommittedOffsets.TryFind key
+                    node.CachedCommittedOffsets.TryFind key
                     |> Option.map (fun offset -> (key, offset))
                 )
                 |> Map.ofList

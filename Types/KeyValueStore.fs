@@ -61,7 +61,7 @@ with
                             assert (text = "key does not exist")
                             return KVResponseMessageBody.ErrorKeyDoesNotExist inReplyTo
                         | 22 ->
-                            let pattern = @"^current value (\d+) is not (\d+)$"
+                            let pattern = @"^current value (-?\d+) is not (-?\d+)$"
                             let ``match`` = Regex.Match(text, pattern)
                             assert ``match``.Success
                             let firstNumber = int ``match``.Groups.[1].Value
@@ -73,4 +73,4 @@ with
                 }
             | x ->
                 Decode.Fail.objExpected x
-                
+

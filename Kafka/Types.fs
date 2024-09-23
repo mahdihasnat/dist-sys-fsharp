@@ -13,15 +13,27 @@ with
     static member get_Codec () : Codec<'a, LogKey> when 'a :> IEncoding and 'a : ( new : unit -> 'a) =
         Codec.isomorph (fun (LogKey x) -> x) LogKey Codecs.string
 
+    member this.Value =
+        match this with
+        | LogKey value -> value
+
 type LogValue = LogValue of int
 with
     static member get_Codec () : Codec<'a, LogValue> when 'a :> IEncoding and 'a : ( new : unit -> 'a) =
         Codec.isomorph (fun (LogValue x) -> x) LogValue Codecs.int
 
+    member this.Value =
+        match this with
+        | LogValue value -> value
+
 type Offset = Offset of int
 with
     static member get_Codec () : Codec<'a, Offset> when 'a :> IEncoding and 'a : ( new : unit -> 'a) =
         Codec.isomorph (fun (Offset x) -> x) Offset Codecs.int
+
+    member this.Value =
+        match this with
+        | Offset value -> value
 
 module Codecs =
     let propMapOfLogKey (codec: Codec<'Encoding, 'a>) = (Ok << Map.ofSeq << Seq.map (Tuple2.mapItem1 LogKey) <<PropertyList.ToSeq <-> (Map.toArray >> Array.map (Tuple2.mapItem1 (fun (LogKey x) -> x)) >> PropertyList)) >.> Codecs.propList codec
@@ -102,11 +114,26 @@ with
 
 type Node = {
     Info : InitialNodeInfo
-    Messages: Map<LogKey, Map<Offset, LogValue>>
-    CommittedOffsets: Map<LogKey, Offset>
-    
-    OnKVReadOkHandlers : Map<MessageId, Node -> Value -> Node * List<Message<OutputMessageBody>>>
-    OnKVErrorKeyDoesNotExistHandlers : Map<MessageId, Node -> Node * List<Message<OutputMessageBody>>>
-    OnKVCompareAndSwapOkHandlers : Map<MessageId, Node -> Node * List<Message<OutputMessageBody>>>
-    OnKVErrorPreconditionFailedHandlers : Map<MessageId, Node -> Value -> Node * List<Message<OutputMessageBody>>>
+    NextMessageId: int
+
+    CachedMessages: Map<LogKey, Map<Offset, LogValue>>
+    CachedCommittedOffsets: Map<LogKey, Offset>
+
+    OnKVReadOkHandlers : Map<MessageId, Node -> Value -> TransitionResult>
+    OnKVErrorKeyDoesNotExistHandlers : Map<MessageId, Node -> TransitionResult>
+    OnKVCompareAndSwapOkHandlers : Map<MessageId, Node -> TransitionResult>
+    OnKVErrorPreconditionFailedHandlers : Map<MessageId, Node -> Value -> TransitionResult>
 }
+with
+    member this.RegisterReadOkHandler (messageId: MessageId) (handler: Node -> Value -> TransitionResult) =
+        { this with OnKVReadOkHandlers = this.OnKVReadOkHandlers.Add(messageId, handler) }
+
+    member this.RegisterErrorKeyDoesNotExistHandler (messageId: MessageId) (handler: Node -> TransitionResult) =
+        { this with OnKVErrorKeyDoesNotExistHandlers = this.OnKVErrorKeyDoesNotExistHandlers.Add(messageId, handler) }
+
+    member this.RegisterCompareAndSwapOkHandler (messageId: MessageId) (handler: Node -> TransitionResult) =
+        { this with OnKVCompareAndSwapOkHandlers = this.OnKVCompareAndSwapOkHandlers.Add(messageId, handler) }
+
+    member this.RegisterErrorPreconditionFailedHandler (messageId: MessageId) (handler: Node -> Value -> TransitionResult) =
+        { this with OnKVErrorPreconditionFailedHandlers = this.OnKVErrorPreconditionFailedHandlers.Add(messageId, handler) }
+and TransitionResult = Node * List<Message<OutputMessageBody>>

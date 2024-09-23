@@ -21,9 +21,10 @@ let main args =
         ref
             {
                 Info = nodeInfo
-                Messages = Map.empty
-                CommittedOffsets = Map.empty
-                
+                NextMessageId = 0
+                CachedMessages = Map.empty
+                CachedCommittedOffsets = Map.empty
+
                 OnKVReadOkHandlers = Map.empty
                 OnKVErrorKeyDoesNotExistHandlers = Map.empty
                 OnKVCompareAndSwapOkHandlers = Map.empty
