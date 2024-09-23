@@ -91,5 +91,22 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
                     MessageBody = replyMessageBody
                 }
             (node, [ replyMessage ])
-        | InputMessageBody.KVResponse _ -> failwith "todo"
+        | InputMessageBody.KVResponse response ->
+            match response with
+            | KVResponseMessageBody.ReadOk(inReplyTo, value) ->
+                node.OnKVReadOkHandlers.TryFind inReplyTo
+                |> Option.get
+                |> fun f -> f node value
+            | KVResponseMessageBody.ErrorKeyDoesNotExist inReplyTo ->
+                node.OnKVErrorKeyDoesNotExistHandlers.TryFind inReplyTo
+                |> Option.get
+                |> fun f -> f node
+            | KVResponseMessageBody.CompareAndSwapOk inReplyTo ->
+                node.OnKVCompareAndSwapOkHandlers.TryFind inReplyTo
+                |> Option.get
+                |> fun f -> f node
+            | KVResponseMessageBody.ErrorPreconditionFailed(inReplyTo, actualValue) ->
+                node.OnKVErrorPreconditionFailedHandlers.TryFind inReplyTo
+                |> Option.get
+                |> fun f -> f node actualValue
 

@@ -104,4 +104,9 @@ type Node = {
     Info : InitialNodeInfo
     Messages: Map<LogKey, Map<Offset, LogValue>>
     CommittedOffsets: Map<LogKey, Offset>
+    
+    OnKVReadOkHandlers : Map<MessageId, Node -> Value -> Node * List<Message<OutputMessageBody>>>
+    OnKVErrorKeyDoesNotExistHandlers : Map<MessageId, Node -> Node * List<Message<OutputMessageBody>>>
+    OnKVCompareAndSwapOkHandlers : Map<MessageId, Node -> Node * List<Message<OutputMessageBody>>>
+    OnKVErrorPreconditionFailedHandlers : Map<MessageId, Node -> Value -> Node * List<Message<OutputMessageBody>>>
 }

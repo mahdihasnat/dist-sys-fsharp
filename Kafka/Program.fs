@@ -23,6 +23,11 @@ let main args =
                 Info = nodeInfo
                 Messages = Map.empty
                 CommittedOffsets = Map.empty
+                
+                OnKVReadOkHandlers = Map.empty
+                OnKVErrorKeyDoesNotExistHandlers = Map.empty
+                OnKVCompareAndSwapOkHandlers = Map.empty
+                OnKVErrorPreconditionFailedHandlers = Map.empty
             }
     let task1 = processStdin
                     (nodeRef, semaphore)
