@@ -91,6 +91,5 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : N
                     MessageBody = replyMessageBody
                 }
             (node, [ replyMessage ])
-        | InputMessageBody.Gossip messageId -> failwith "todo"
-        | InputMessageBody.GossipAck messageId -> failwith "todo"
+        | InputMessageBody.KVResponse _ -> failwith "todo"
 
