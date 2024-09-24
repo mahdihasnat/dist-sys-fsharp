@@ -78,6 +78,9 @@ jobs:
             -   name: Test Single node Kafka style log
                 run: ./maelstrom/maelstrom test -w kafka --bin ./bin/Kafka/Kafka --node-count 1 --concurrency 2n --time-limit 20 --rate 1000
 
+            -   name: Test Multi node Kafka style log
+                run: ./maelstrom/maelstrom test -w kafka --bin ./bin/Kafka/Kafka --node-count 2 --concurrency 2n --time-limit 20 --rate 1000
+
             # -   uses: actions/upload-artifact@v4
             #     if: always()
             #     with:
