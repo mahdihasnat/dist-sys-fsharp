@@ -37,7 +37,12 @@ let refreshLog (logKey: LogKey) node (f : Node -> TransitionResult) : Transition
                 MessageBody = seqKVReadLogMessageBody
             }
         let node = node.RegisterReadOkHandler queryMessageId (fun node (Value value) ->
-            let updatedLogs = (nextOffset, LogValue value) :: (node.CachedMessages.TryFind logKey |> Option.defaultValue List.empty)
+            let updatedLogs =
+                if node.CachedMessages.TryFind logKey |> Option.defaultValue List.empty |> List.contains (nextOffset, LogValue value) then
+                    node.CachedMessages.TryFind logKey |> Option.defaultValue List.empty
+                else
+                    (nextOffset, LogValue value) :: (node.CachedMessages.TryFind logKey |> Option.defaultValue List.empty)
+
             let node = { node with CachedMessages = node.CachedMessages.Add(logKey, updatedLogs) }
             refreshLogsNext node
         )
@@ -56,12 +61,15 @@ let assertConsistency (node: Node) : unit =
     |> Map.forall (fun logKey values ->
         values
         |> List.map fst
-        |> List.sort
+        |> List.rev
         |> fun offsets ->
             offsets = List.init offsets.Length (fun i -> Offset i)
     )
     |> fun x ->
-        assert x
+        eprintfn "assertConsistency: %A" x
+        if x = false then
+            failwithf "assertConsistency failed"
+
 
 let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : TransitionResult =
     assertConsistency node
@@ -83,6 +91,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                         Destination = msg.Source
                         MessageBody = sendOkReplyMessageBody
                     }
+                eprintfn $"send: key: %A{key} value: %A{value} send_ok reply on {offset}"
                 node, [sendOkReplyMessage]
 
             let incrementOffsetOkHandler (node: Node) (offset: Offset) : TransitionResult =
@@ -96,6 +105,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                         MessageBody = seqKVWriteMessageBody
                     }
                 let node = node.RegisterCompareAndSwapOkHandler writeLogMessageId (fun node -> writeLogOkHandler node offset)
+                eprintfn $"send: key: %A{key} value: %A{value} seq-kv write log in {offset} logIndex: {logIndex key offset}"
                 node, [seqKVWriteMessage]
 
             let rec latestOffsetReadOkHandler (node: Node) (Offset offset) : TransitionResult =
@@ -111,6 +121,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                     }
                 let node = node.RegisterCompareAndSwapOkHandler updateMessageId (fun node -> incrementOffsetOkHandler node nextOffset)
                 let node = node.RegisterErrorPreconditionFailedHandler updateMessageId (fun node (Value actualValue) -> latestOffsetReadOkHandler node (Offset (actualValue + 1)))
+                eprintfn $"send: key: %A{key} value: %A{value} cas write to {offset + 1}"
                 node, [linKVWriteMessage]
 
 
@@ -123,10 +134,10 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                     Destination = NodeId.LinKv
                     MessageBody = linKVReadMessageBody
                 }
-            let onReadOk (node: Node) (Value value) : TransitionResult =
-                latestOffsetReadOkHandler node (Offset value)
-            let node = node.RegisterReadOkHandler queryMessageId onReadOk
+
+            let node = node.RegisterReadOkHandler queryMessageId (fun node (Value value) -> latestOffsetReadOkHandler node (Offset value))
             let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node -> latestOffsetReadOkHandler node (Offset -1))
+            eprintfn $"send: key: %A{key} value: %A{value} lin-kv-read"
             node, [linKVReadMessage]
 
         | InputMessageBody.Poll (messageId, offsets) ->
@@ -138,6 +149,20 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                         node.CachedMessages.TryFind key
                         |> Option.map (List.filter (fun (offset', _) -> offset <= offset') >> List.sortBy fst)
                     )
+                messages
+                |> Map.iter (fun key messages ->
+
+                    node.CachedMessages.TryFind key
+                    |> Option.map (eprintfn "key:%A: %A" key)
+                    |> Option.defaultValue ()
+
+                    let uniq = messages |> List.map fst |> List.distinct
+                    if uniq.Length <> messages.Length then
+                        eprintfn "key:%A: mesages %A" key messages
+                        eprintfn "key:%A: uniq %A" key uniq
+                        failwith "assertion failed"
+                    assert (uniq.Length = messages.Length)
+                )
                 let replyMessageBody: OutputMessageBody =
                     PollAck (messageId, messages)
                 let replyMessage: Message<OutputMessageBody> =
