@@ -51,8 +51,20 @@ let rec refreshLogs (logKeys: List<LogKey>) node (f : Node -> TransitionResult) 
     | x :: xs ->
         refreshLog x node (fun node -> refreshLogs xs node f)
 
-let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : TransitionResult =
+let assertConsistency (node: Node) : unit =
+    node.CachedMessages
+    |> Map.forall (fun logKey values ->
+        values
+        |> List.map fst
+        |> List.sort
+        |> fun offsets ->
+            offsets = List.init offsets.Length (fun i -> Offset i)
+    )
+    |> fun x ->
+        assert x
 
+let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : TransitionResult =
+    assertConsistency node
     match action with
     | Choice2Of2 unit ->
         (node, List.empty)
@@ -124,7 +136,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                     offsets
                     |> Map.choosei (fun key offset ->
                         node.CachedMessages.TryFind key
-                        |> Option.map (List.filter (fun (offset', _) -> offset <= offset'))
+                        |> Option.map (List.filter (fun (offset', _) -> offset <= offset') >> List.sortBy fst)
                     )
                 let replyMessageBody: OutputMessageBody =
                     PollAck (messageId, messages)
@@ -194,3 +206,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                 |> Option.get
                 |> fun f -> f node actualValue
 
+let transitionOuter (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : TransitionResult =
+    let oldNode = node
+    let node, messages = transition node action
+    node, messages
