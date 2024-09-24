@@ -41,9 +41,7 @@ let refreshLog (logKey: LogKey) node (f : Node -> TransitionResult) : Transition
             let node = { node with CachedMessages = node.CachedMessages.Add(logKey, updatedLogs) }
             refreshLogsNext node
         )
-        let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node ->
-            f node
-        )
+        let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId f
         node, [seqKVReadLogMessage]
     refreshLogsNext node
 
