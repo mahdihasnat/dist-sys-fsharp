@@ -21,7 +21,7 @@ let genMessageId (node: Node) : Node * MessageId =
 
 
 let refreshLog (logKey: LogKey) node (f : Node -> TransitionResult) : TransitionResult =
-    let rec refreshLogsNext (node: Node) (f : Node -> TransitionResult) : TransitionResult =
+    let rec refreshLogsNext (node: Node) : TransitionResult =
         let node, queryMessageId = genMessageId node
         let nextOffset =
             match node.CachedMessages.TryFind logKey with
@@ -39,13 +39,13 @@ let refreshLog (logKey: LogKey) node (f : Node -> TransitionResult) : Transition
         let node = node.RegisterReadOkHandler queryMessageId (fun node (Value value) ->
             let updatedLogs = (nextOffset, LogValue value) :: (node.CachedMessages.TryFind logKey |> Option.defaultValue List.empty)
             let node = { node with CachedMessages = node.CachedMessages.Add(logKey, updatedLogs) }
-            refreshLogsNext node f
+            refreshLogsNext node
         )
         let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node ->
             f node
         )
         node, [seqKVReadLogMessage]
-    refreshLogsNext node f
+    refreshLogsNext node
 
 let rec refreshLogs (logKeys: List<LogKey>) node (f : Node -> TransitionResult) : TransitionResult =
     match logKeys with
