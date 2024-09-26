@@ -68,3 +68,17 @@ I stored global counter at the store with key `sum`.
 For read queries, node will get latest sum from the store and reply to client. For add updates, node will get the latest sum from the store and do compare and swap operation to update the sum. If cas operation fails, node will retry the operation with updated value.
 
 One obvious optimization to reduce the number of messages is to maintain a local cache of the sum value. So for the read operation, node don't need to query the store every time. And for the add operation, node will directly do cas operation with the local cache value. Also we need to update the cache say every 2 seconds.
+
+# Challenge #5a: Single node kafka style log
+Kept a dictionary of list of logs for each log key. This is quiet simple implementation to maintain information in the dictionary. Also I needed another dictionary to maintain the committed offsets against each log key.
+
+# Challenge #5b: Multi node kafka style log
+Now we can't store information in single node. So I maintained last written offset value for each log key in linearizable key value store provided by maelstrom. Also actual log will be stored in separate sequential key value store. Key for the seq-kv would be `$logKey_$offset`. So my procedure for a send command (append new log value for a particular log key and return the offset it was appended) would be the following:
+1. Get latest offset from the linearizable key value service, let it be `lastOffset`.
+2. Do a compare and swap operation (`lastOffset` to `lastOffset + 1`) on the lin-kv.
+3. If the compare and swap fails then update the `lastOffset` and go to step 2
+4. So write to lin-kv is a success and then we write log value to the offset `lastOffset + 1`.
+
+I choose `F#` to solve this whole challenges due to its strong type check and compile type safety. But in this problem I made a mistake in domain modeling. The problem boils down to choosing list over set. Clearly I didn't think much while designing much :facepalm:. Here is the [bug fix commit](https://github.com/mahdihasnat/dist-sys-fsharp/commit/e3d47ca7f27c1784b5e1b216374ee329169e783f) for the curious.
+
+There are many optimization I had in mind while solving this subproblem. But getting correct solution was my headache due to mistake in domain modeling part. I am saving those optimizations for next subproblem.
