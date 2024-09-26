@@ -116,7 +116,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                 let linKVWriteMessage =
                     {
                         Source = node.Info.NodeId
-                        Destination = NodeId.LinKv
+                        Destination = NodeId.SeqKv
                         MessageBody = linKVWriteMessageBody
                     }
                 let node = node.RegisterCompareAndSwapOkHandler updateMessageId (fun node -> incrementOffsetOkHandler node nextOffset)
@@ -131,7 +131,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
             let linKVReadMessage =
                 {
                     Source = node.Info.NodeId
-                    Destination = NodeId.LinKv
+                    Destination = NodeId.SeqKv
                     MessageBody = linKVReadMessageBody
                 }
 
