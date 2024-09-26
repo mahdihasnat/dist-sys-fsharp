@@ -79,6 +79,6 @@ Now we can't store information in single node. So I maintained last written offs
 3. If the compare and swap fails then update the `lastOffset` and go to step 2
 4. So write to lin-kv is a success and then we write log value to the offset `lastOffset + 1`.
 
-I choose `F#` to solve this whole challenges due to its strong type check and compile type safety. But in this problem I made a mistake in domain modeling. The problem boils down to choosing list over set. Clearly I didn't think much while designing much :facepalm:. Here is the [bug fix commit](https://github.com/mahdihasnat/dist-sys-fsharp/commit/e3d47ca7f27c1784b5e1b216374ee329169e783f) for the curious.
+I choose `F#` to solve this whole challenges due to its strong type check and compile type safety. But in this problem I made a mistake in domain modeling. The problem boils down to choosing list over set. Clearly I didn't think much while designing types :facepalm:. Here is the [bug fix commit](https://github.com/mahdihasnat/dist-sys-fsharp/commit/e3d47ca7f27c1784b5e1b216374ee329169e783f) for the curious.
 
 There are many optimization I had in mind while solving this subproblem. But getting correct solution was my headache due to mistake in domain modeling part. I am saving those optimizations for next subproblem.
