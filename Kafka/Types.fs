@@ -8,6 +8,12 @@ open FSharpPlus.Data
 open Types
 open Fleece
 
+
+type Value = Value of int
+with
+    static member get_Codec () : Codec<'a, Value> when 'a :> IEncoding and 'a : ( new : unit -> 'a) =
+        Codec.isomorph (fun (Value x) -> x) Value Codecs.int
+
 type LogKey = LogKey of string
 with
     static member get_Codec () : Codec<'a, LogKey> when 'a :> IEncoding and 'a : ( new : unit -> 'a) =
@@ -44,7 +50,7 @@ type InputMessageBody =
     | Poll of MessageId * Offsets: Map<LogKey, Offset>
     | CommitOffsets of MessageId * Offsets: Map<LogKey, Offset>
     | ListCommittedOffsets of MessageId * NonEmptyList<LogKey>
-    | KVResponse of KVResponseMessageBody
+    | KVResponse of KVResponseMessageBody<Value>
 with
     static member OfJson json =
         match json with
@@ -70,7 +76,7 @@ with
                     let! keys = jget o "keys"
                     return ListCommittedOffsets(messageId, keys)
                 | _ ->
-                    let! kvResponse = KVResponseMessageBody.OfJson json
+                    let! kvResponse = KVResponseMessageBody<Value>.OfJson json
                     return KVResponse kvResponse
             }
         | x ->

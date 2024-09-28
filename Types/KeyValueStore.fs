@@ -5,11 +5,8 @@ open FSharpPlus
 open Fleece
 open System.Text.RegularExpressions
 open Types
+open Fleece.SystemTextJson
 
-type Value = Value of int
-with
-    static member get_Codec () : Codec<'a, Value> when 'a :> IEncoding and 'a : ( new : unit -> 'a) =
-        Codec.isomorph (fun (Value x) -> x) Value Codecs.int
 
 [<RequireQualifiedAccess>]
 type KVRequestMessageBody<'Value> =
@@ -35,11 +32,11 @@ with
                 ]
 
 [<RequireQualifiedAccess>]
-type KVResponseMessageBody =
-    | ReadOk of InReplyTo: MessageId * Value: Value
+type KVResponseMessageBody<'Value> =
+    | ReadOk of InReplyTo: MessageId * Value: 'Value
     | ErrorKeyDoesNotExist of InReplyTo: MessageId
     | CompareAndSwapOk of InReplyTo: MessageId
-    | ErrorPreconditionFailed of InReplyTo: MessageId * ActualValue: Value
+    | ErrorPreconditionFailed of InReplyTo: MessageId * ActualValue: 'Value
 with
     static member inline OfJson json =
             match json with
@@ -61,11 +58,11 @@ with
                             assert (text = "key does not exist")
                             return KVResponseMessageBody.ErrorKeyDoesNotExist inReplyTo
                         | 22 ->
-                            let pattern = @"^current value (-?\d+) is not (-?\d+)$"
+                            let pattern = @"^current value (.*) is not (.*)$"
                             let ``match`` = Regex.Match(text, pattern)
                             assert ``match``.Success
-                            let firstNumber = int ``match``.Groups.[1].Value
-                            return KVResponseMessageBody.ErrorPreconditionFailed (inReplyTo, Value firstNumber)
+                            let! firstValue = ofJsonText ``match``.Groups.[1].Value
+                            return KVResponseMessageBody.ErrorPreconditionFailed (inReplyTo, firstValue)
                         | _ ->
                             return! Error <| DecodeError.Uncategorized $"Error code is not 20 or 22, code = {code}"
                     | _ ->

@@ -8,6 +8,10 @@ open FSharpPlus.Data
 open Types
 open Fleece
 
+type Value = Value of int
+with
+    static member get_Codec () : Codec<'a, Value> when 'a :> IEncoding and 'a : ( new : unit -> 'a) =
+        Codec.isomorph (fun (Value x) -> x) Value Codecs.int
 
 type Delta = Delta of int
 with
@@ -20,7 +24,7 @@ with
 type InputMessageBody =
     | Add of MessageId * Delta
     | Read of MessageId
-    | KVResponse of KVResponseMessageBody
+    | KVResponse of KVResponseMessageBody<Value>
 with
     static member OfJson json =
             match json with
@@ -36,7 +40,7 @@ with
                         let! messageId = jget o "msg_id"
                         return Read messageId
                     | _ ->
-                        let! kVResponse = KVResponseMessageBody.OfJson json
+                        let! kVResponse = KVResponseMessageBody<Value>.OfJson json
                         return KVResponse kVResponse
                 }
             | x ->
