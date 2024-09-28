@@ -43,39 +43,26 @@ let withSeqKvRead node (f : Node -> Value -> Node * List<Message<OutputMessageBo
 let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : Node * List<Message<OutputMessageBody>> =
     match action with
     | Choice2Of2 unit ->
-        withSeqKvRead node (fun node value ->
-            let node =
-                {
-                    node with
-                        ValueCache = value
-                }
-            (node, [])
-        )
+        node, []
     | Choice1Of2 msg ->
         match msg.MessageBody with
         | Add(messageId, delta) ->
-            let onSeqKVCompareAndSwapOk =
-                fun (node: Node) ->
-                    let node =
-                            {
-                                node with
-                                    ValueCache = delta + node.ValueCache
-                            }
-                    let outputMessageBody: OutputMessageBody =
-                        AddAck(messageId)
-                    let outputMessage =
-                        {
-                            Source = node.Info.NodeId
-                            Destination = msg.Source
-                            MessageBody = outputMessageBody
-                        }
-                    node, [outputMessage]
+            let onSeqKVCompareAndSwapOk node =
+                let outputMessageBody: OutputMessageBody =
+                    AddAck(messageId)
+                let outputMessage =
+                    {
+                        Source = node.Info.NodeId
+                        Destination = msg.Source
+                        MessageBody = outputMessageBody
+                    }
+                node, [outputMessage]
 
-            let rec addHandler node : Node * List<Message<OutputMessageBody>> =
-                let newValue = delta + node.ValueCache
+            let rec addHandler node value : Node * List<Message<OutputMessageBody>> =
+                let newValue = delta + value
                 let (node, updateMessageId: MessageId) = genMessageId node
                 let updateMessageBody: OutputMessageBody =
-                    SeqKVOperation (KVRequestMessageBody.CompareAndSwap (updateMessageId, "sum", node.ValueCache, newValue, node.ValueCache = Value 0))
+                    SeqKVOperation (KVRequestMessageBody.CompareAndSwap (updateMessageId, "sum", value, newValue, value = Value 0))
                 let updateMessage =
                     {
                         Source = node.Info.NodeId
@@ -83,35 +70,26 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                         MessageBody = updateMessageBody
                     }
 
-                let onSeqKVCompareAndSwapPreconditionFailed =
-                    fun (node: Node) (value: Value) ->
-                        let node =
-                            {
-                                node with
-                                    ValueCache = value
-                            }
-                        addHandler node
-
                 let node =
                     {
                         node with
                             OnSeqKVCompareAndSwapOkHandlers = node.OnSeqKVCompareAndSwapOkHandlers.Add(updateMessageId, onSeqKVCompareAndSwapOk)
-                            OnSeqKVCompareAndSwapPreconditionFailedHandlers = node.OnSeqKVCompareAndSwapPreconditionFailedHandlers.Add(updateMessageId, onSeqKVCompareAndSwapPreconditionFailed)
+                            OnSeqKVCompareAndSwapPreconditionFailedHandlers = node.OnSeqKVCompareAndSwapPreconditionFailedHandlers.Add(updateMessageId, addHandler)
                     }
                 node, [updateMessage]
-
-            addHandler node
-
+            withSeqKvRead node addHandler
         | Read messageId ->
-            let outputMessageBody: OutputMessageBody =
-                ReadAck(messageId, node.ValueCache)
-            let outputMessage =
-                {
-                    Source = node.Info.NodeId
-                    Destination = msg.Source
-                    MessageBody = outputMessageBody
-                }
-            node, [outputMessage]
+            let replyReadOk node value =
+                let outputMessageBody: OutputMessageBody =
+                    ReadAck(messageId, value)
+                let outputMessage =
+                    {
+                        Source = node.Info.NodeId
+                        Destination = msg.Source
+                        MessageBody = outputMessageBody
+                    }
+                node, [outputMessage]
+            withSeqKvRead node replyReadOk
         | KVResponse (KVResponseMessageBody.ReadOk(inReplyTo, value)) ->
             node.OnSeqKVReadOkHandlers
             |> Map.tryFind inReplyTo

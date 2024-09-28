@@ -31,7 +31,6 @@ let main args =
             {
                 Info = nodeInfo
                 NextMessageId = 0
-                ValueCache = Value 0
                 OnSeqKVReadOkHandlers = Map.empty
                 OnSeqKVReadKeyDoesNotExistHandlers = Map.empty
                 OnSeqKVCompareAndSwapOkHandlers = Map.empty
@@ -40,13 +39,7 @@ let main args =
     let task1 = processStdin
                     (nodeRef, semaphore)
                     transition
-
-    let task2 = repeatSchedule
-                    (TimeSpan.FromMilliseconds 1500)
-                    (nodeRef, semaphore)
-                    (fun _node -> ())
-                    transition
-    [| task1; task2 |]
+    [| task1 |]
     |> Array.map Async.AwaitTask
     |> Async.Parallel
     |> Async.RunSynchronously

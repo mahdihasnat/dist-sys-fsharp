@@ -13,10 +13,10 @@ type Delta = Delta of int
 with
     static member get_Codec () : Codec<'a, Delta> when 'a :> IEncoding and 'a : ( new : unit -> 'a) =
         Codec.isomorph (fun (Delta x) -> x) Delta Codecs.int
-    
+
     static member inline (+) (Delta x, Value y) : Value =
             Value (x + y)
-                
+
 type InputMessageBody =
     | Add of MessageId * Delta
     | Read of MessageId
@@ -37,7 +37,7 @@ with
                         return Read messageId
                     | _ ->
                         let! kVResponse = KVResponseMessageBody.OfJson json
-                        return KVResponse kVResponse 
+                        return KVResponse kVResponse
                 }
             | x ->
                 Decode.Fail.objExpected x
@@ -66,8 +66,6 @@ with
 type Node = {
     Info: InitialNodeInfo
     NextMessageId: int
-
-    ValueCache: Value
 
     OnSeqKVReadOkHandlers : Map<MessageId, Node -> Value -> Node * List<Message<OutputMessageBody>>>
     OnSeqKVReadKeyDoesNotExistHandlers : Map<MessageId, Node -> Node * List<Message<OutputMessageBody>>>
