@@ -2,8 +2,6 @@
 module GrowOnlyCounter.Transition
 
 open System
-open FSharpPlus
-open FSharpPlus.Data
 open Microsoft.FSharp.Core
 open Types
 open GrowOnlyCounter
@@ -15,7 +13,7 @@ let genMessageId (node: Node) : Node * MessageId =
     },
     MessageId node.NextMessageId
 
-let withSeqKvSingleRead node (f : Node -> Value -> Node * List<Message<OutputMessageBody>>) : Node * List<Message<OutputMessageBody>> =
+let withSeqKvSingleRead node (f : Node -> Value * Version -> Node * List<Message<OutputMessageBody>>) : Node * List<Message<OutputMessageBody>> =
     let node, queryMessageId = genMessageId node
     let seqKVReadMessageBody: OutputMessageBody =
         SeqKVOperation (KVRequestMessageBody.Read (queryMessageId, "sum"))
@@ -27,11 +25,11 @@ let withSeqKvSingleRead node (f : Node -> Value -> Node * List<Message<OutputMes
         }
 
     let onSeqKvReadOk =
-        fun (node: Node) (value: Value) ->
-            f node value
+        fun (node: Node) (value: Value, version: Version) ->
+            f node (value, version)
     let onSeqKVReadKeyDoesNotExist =
         fun (node: Node) ->
-            f node (Value 0)
+            f node (Value 0, Version 0)
     let node =
         {
             node with
@@ -39,6 +37,29 @@ let withSeqKvSingleRead node (f : Node -> Value -> Node * List<Message<OutputMes
                 OnSeqKVReadKeyDoesNotExistHandlers = node.OnSeqKVReadKeyDoesNotExistHandlers.Add(queryMessageId, onSeqKVReadKeyDoesNotExist)
         }
     node, [seqKVReadMessage]
+
+let withTransformValueAndVersion node (mapper: Value * Version -> Value * Version) (f: Node -> Value * Version -> Node * List<Message<OutputMessageBody>>) : Node * List<Message<OutputMessageBody>> =
+    let rec writeTransformedValue node (oldValueAndVersion) : Node * List<Message<OutputMessageBody>> =
+        let (node, updateMessageId: MessageId) = genMessageId node
+        let newValueAndVersion = mapper oldValueAndVersion
+        let updateMessageBody: OutputMessageBody =
+            SeqKVOperation (KVRequestMessageBody.CompareAndSwap (updateMessageId, "sum", oldValueAndVersion,  newValueAndVersion, fst oldValueAndVersion = Value 0))
+        let updateMessage =
+            {
+                Source = node.Info.NodeId
+                Destination = NodeId.SeqKv
+                MessageBody = updateMessageBody
+            }
+
+        let node =
+            {
+                node with
+                    OnSeqKVCompareAndSwapOkHandlers = node.OnSeqKVCompareAndSwapOkHandlers.Add(updateMessageId, (fun node -> f node newValueAndVersion))
+                    OnSeqKVCompareAndSwapPreconditionFailedHandlers = node.OnSeqKVCompareAndSwapPreconditionFailedHandlers.Add(updateMessageId, fun node -> withSeqKvSingleRead node writeTransformedValue)
+            }
+        node, [updateMessage]
+
+    withSeqKvSingleRead node writeTransformedValue
 
 let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : Node * List<Message<OutputMessageBody>> =
     match action with
@@ -58,29 +79,12 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                     }
                 node, [outputMessage]
 
-            let rec addHandler node value : Node * List<Message<OutputMessageBody>> =
-                let newValue = delta + value
-                let (node, updateMessageId: MessageId) = genMessageId node
-                let updateMessageBody: OutputMessageBody =
-                    SeqKVOperation (KVRequestMessageBody.CompareAndSwap (updateMessageId, "sum", value, newValue, value = Value 0))
-                let updateMessage =
-                    {
-                        Source = node.Info.NodeId
-                        Destination = NodeId.SeqKv
-                        MessageBody = updateMessageBody
-                    }
-
-                let node =
-                    {
-                        node with
-                            OnSeqKVCompareAndSwapOkHandlers = node.OnSeqKVCompareAndSwapOkHandlers.Add(updateMessageId, replyAddOk)
-                            OnSeqKVCompareAndSwapPreconditionFailedHandlers = node.OnSeqKVCompareAndSwapPreconditionFailedHandlers.Add(updateMessageId, fun node -> withSeqKvSingleRead node addHandler)
-                    }
-                node, [updateMessage]
-
-            withSeqKvSingleRead node addHandler
+            if delta = Delta 0 then
+                replyAddOk node
+            else
+                withTransformValueAndVersion node (fun (value, _version) -> (value + delta, Version 0)) (fun node _ -> replyAddOk node)
         | Read messageId ->
-            let replyReadOk node value =
+            let replyReadOk node (value, _version) =
                 let outputMessageBody: OutputMessageBody =
                     ReadAck(messageId, value)
                 let outputMessage =
@@ -90,7 +94,7 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                         MessageBody = outputMessageBody
                     }
                 node, [outputMessage]
-            withSeqKvRead node replyReadOk
+            withTransformValueAndVersion node (fun (value, version) -> (value, version + 1)) replyReadOk
         | KVResponse (KVResponseMessageBody.ReadOk(inReplyTo, value)) ->
             node.OnSeqKVReadOkHandlers
             |> Map.tryFind inReplyTo
