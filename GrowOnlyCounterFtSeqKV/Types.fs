@@ -74,5 +74,5 @@ type Node = {
     OnSeqKVReadOkHandlers : Map<MessageId, Node -> Value -> Node * List<Message<OutputMessageBody>>>
     OnSeqKVReadKeyDoesNotExistHandlers : Map<MessageId, Node -> Node * List<Message<OutputMessageBody>>>
     OnSeqKVCompareAndSwapOkHandlers : Map<MessageId, Node -> Node * List<Message<OutputMessageBody>>>
-    OnSeqKVCompareAndSwapPreconditionFailedHandlers : Map<MessageId, Node -> Value -> Node * List<Message<OutputMessageBody>>>
+    OnSeqKVCompareAndSwapPreconditionFailedHandlers : Map<MessageId, Node -> Node * List<Message<OutputMessageBody>>>
 }

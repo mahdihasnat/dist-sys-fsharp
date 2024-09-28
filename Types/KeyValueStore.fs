@@ -34,9 +34,9 @@ with
 [<RequireQualifiedAccess>]
 type KVResponseMessageBody<'Value> =
     | ReadOk of InReplyTo: MessageId * Value: 'Value
-    | ErrorKeyDoesNotExist of InReplyTo: MessageId
     | CompareAndSwapOk of InReplyTo: MessageId
-    | ErrorPreconditionFailed of InReplyTo: MessageId * ActualValue: 'Value
+    | ErrorKeyDoesNotExist of InReplyTo: MessageId
+    | ErrorPreconditionFailed of InReplyTo: MessageId
 with
     static member inline OfJson json =
             match json with
@@ -58,11 +58,7 @@ with
                             assert (text = "key does not exist")
                             return KVResponseMessageBody.ErrorKeyDoesNotExist inReplyTo
                         | 22 ->
-                            let pattern = @"^current value (.*) is not (.*)$"
-                            let ``match`` = Regex.Match(text, pattern)
-                            assert ``match``.Success
-                            let! firstValue = ofJsonText ``match``.Groups.[1].Value
-                            return KVResponseMessageBody.ErrorPreconditionFailed (inReplyTo, firstValue)
+                            return KVResponseMessageBody.ErrorPreconditionFailed inReplyTo
                         | _ ->
                             return! Error <| DecodeError.Uncategorized $"Error code is not 20 or 22, code = {code}"
                     | _ ->

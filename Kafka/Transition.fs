@@ -108,6 +108,22 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                 eprintfn $"send: key: %A{key} value: %A{value} seq-kv write log in {offset} logIndex: {logIndex key offset}"
                 node, [seqKVWriteMessage]
 
+            let withLatestOffsetRead node (f: Node -> Offset -> TransitionResult) : TransitionResult =
+                let node, queryMessageId = genMessageId node
+                let linKVReadMessageBody: OutputMessageBody =
+                    KVRequest (KVRequestMessageBody.Read (queryMessageId, key.Value))
+                let linKVReadMessage =
+                    {
+                        Source = node.Info.NodeId
+                        Destination = NodeId.LinKv
+                        MessageBody = linKVReadMessageBody
+                    }
+
+                let node = node.RegisterReadOkHandler queryMessageId (fun node (Value value) -> f node (Offset value))
+                let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node -> f node (Offset -1))
+                eprintfn $"send: key: %A{key} value: %A{value} lin-kv-read"
+                node, [linKVReadMessage]
+
             let rec latestOffsetReadOkHandler (node: Node) (Offset offset) : TransitionResult =
                 let nextOffset = Offset (offset + 1)
                 let node, updateMessageId = genMessageId node
@@ -120,25 +136,11 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                         MessageBody = linKVWriteMessageBody
                     }
                 let node = node.RegisterCompareAndSwapOkHandler updateMessageId (fun node -> incrementOffsetOkHandler node nextOffset)
-                let node = node.RegisterErrorPreconditionFailedHandler updateMessageId (fun node (Value actualValue) -> latestOffsetReadOkHandler node (Offset (actualValue + 1)))
+                let node = node.RegisterErrorPreconditionFailedHandler updateMessageId (fun node -> withLatestOffsetRead node latestOffsetReadOkHandler)
                 eprintfn $"send: key: %A{key} value: %A{value} cas write to {offset + 1}"
                 node, [linKVWriteMessage]
 
-
-            let node, queryMessageId = genMessageId node
-            let linKVReadMessageBody: OutputMessageBody =
-                KVRequest (KVRequestMessageBody.Read (queryMessageId, key.Value))
-            let linKVReadMessage =
-                {
-                    Source = node.Info.NodeId
-                    Destination = NodeId.LinKv
-                    MessageBody = linKVReadMessageBody
-                }
-
-            let node = node.RegisterReadOkHandler queryMessageId (fun node (Value value) -> latestOffsetReadOkHandler node (Offset value))
-            let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node -> latestOffsetReadOkHandler node (Offset -1))
-            eprintfn $"send: key: %A{key} value: %A{value} lin-kv-read"
-            node, [linKVReadMessage]
+            withLatestOffsetRead node latestOffsetReadOkHandler
 
         | InputMessageBody.Poll (messageId, offsets) ->
 
@@ -221,15 +223,15 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
             | KVResponseMessageBody.ErrorKeyDoesNotExist inReplyTo ->
                 node.OnKVErrorKeyDoesNotExistHandlers.TryFind inReplyTo
                 |> Option.get
-                |> fun f -> f node
+                <| node
             | KVResponseMessageBody.CompareAndSwapOk inReplyTo ->
                 node.OnKVCompareAndSwapOkHandlers.TryFind inReplyTo
                 |> Option.get
-                |> fun f -> f node
-            | KVResponseMessageBody.ErrorPreconditionFailed(inReplyTo, actualValue) ->
+                <| node
+            | KVResponseMessageBody.ErrorPreconditionFailed inReplyTo ->
                 node.OnKVErrorPreconditionFailedHandlers.TryFind inReplyTo
                 |> Option.get
-                |> fun f -> f node actualValue
+                <| node
 
 let transitionOuter (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : TransitionResult =
     let oldNode = node

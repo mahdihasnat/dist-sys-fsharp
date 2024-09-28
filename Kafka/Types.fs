@@ -128,7 +128,7 @@ type Node = {
     OnKVReadOkHandlers : Map<MessageId, Node -> Value -> TransitionResult>
     OnKVErrorKeyDoesNotExistHandlers : Map<MessageId, Node -> TransitionResult>
     OnKVCompareAndSwapOkHandlers : Map<MessageId, Node -> TransitionResult>
-    OnKVErrorPreconditionFailedHandlers : Map<MessageId, Node -> Value -> TransitionResult>
+    OnKVErrorPreconditionFailedHandlers : Map<MessageId, Node -> TransitionResult>
 }
 with
     member this.RegisterReadOkHandler (messageId: MessageId) (handler: Node -> Value -> TransitionResult) =
@@ -140,6 +140,6 @@ with
     member this.RegisterCompareAndSwapOkHandler (messageId: MessageId) (handler: Node -> TransitionResult) =
         { this with OnKVCompareAndSwapOkHandlers = this.OnKVCompareAndSwapOkHandlers.Add(messageId, handler) }
 
-    member this.RegisterErrorPreconditionFailedHandler (messageId: MessageId) (handler: Node -> Value -> TransitionResult) =
+    member this.RegisterErrorPreconditionFailedHandler (messageId: MessageId) (handler: Node -> TransitionResult) =
         { this with OnKVErrorPreconditionFailedHandlers = this.OnKVErrorPreconditionFailedHandlers.Add(messageId, handler) }
 and TransitionResult = Node * List<Message<OutputMessageBody>>
