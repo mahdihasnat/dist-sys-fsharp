@@ -40,31 +40,6 @@ let withSeqKvSingleRead node (f : Node -> Value -> Node * List<Message<OutputMes
         }
     node, [seqKVReadMessage]
 
-let withSeqKvRead node (f : Node -> Value -> Node * List<Message<OutputMessageBody>>) : Node * List<Message<OutputMessageBody>> =
-    let node, queryMessageId = genMessageId node
-    let seqKVReadMessageBody: OutputMessageBody =
-        SeqKVOperation (KVRequestMessageBody.Read (queryMessageId, "sum"))
-    let seqKVReadMessage =
-        {
-            Source = node.Info.NodeId
-            Destination = NodeId.SeqKv
-            MessageBody = seqKVReadMessageBody
-        }
-
-    let onSeqKvReadOk =
-        fun (node: Node) (value: Value) ->
-            f node value
-    let onSeqKVReadKeyDoesNotExist =
-        fun (node: Node) ->
-            f node (Value 0)
-    let node =
-        {
-            node with
-                OnSeqKVReadOkHandlers = node.OnSeqKVReadOkHandlers.Add(queryMessageId, onSeqKvReadOk)
-                OnSeqKVReadKeyDoesNotExistHandlers = node.OnSeqKVReadKeyDoesNotExistHandlers.Add(queryMessageId, onSeqKVReadKeyDoesNotExist)
-        }
-    node, [seqKVReadMessage]
-
 let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : Node * List<Message<OutputMessageBody>> =
     match action with
     | Choice2Of2 unit ->
@@ -103,7 +78,7 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
                     }
                 node, [updateMessage]
 
-            withSeqKvRead node addHandler
+            withSeqKvSingleRead node addHandler
         | Read messageId ->
             let replyReadOk node value =
                 let outputMessageBody: OutputMessageBody =
