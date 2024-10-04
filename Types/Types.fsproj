@@ -6,6 +6,8 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Accumulator.fs" />
+        <Compile Include="Transition.fs" />
         <Compile Include="CodecExtension.fs" />
         <Compile Include="Node.fs" />
         <Compile Include="Message.fs" />

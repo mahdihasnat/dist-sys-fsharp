@@ -73,19 +73,6 @@ with
             | SeqKVOperation x ->
                 KVRequestMessageBody<_>.ToJson x
 
-type Accumulator<'T, 'SideEffect> = 'T * List<'SideEffect>
-
-type AccumulatorBuilder() =
-    member this.Return(x: 'T) : Accumulator<'T, 'SideEffect> = x, []
-    member this.Yield(x: 'SideEffect) : Accumulator<unit, 'SideEffect> =
-        (), [x]
-    member this.Combine((x: unit, sideEffects1), (y, sideEffects2)) : Accumulator<'T, 'SideEffect> =
-        y, sideEffects1 @ sideEffects2
-    member this.Delay(f: unit -> Accumulator<'T, 'SideEffect>) : Accumulator<'T, 'SideEffect> = f ()
-    member this.ReturnFrom (x: Accumulator<'T, 'SideEffect>) = x
-
-let accumulator = new AccumulatorBuilder()
-
 type Node = {
     Info: InitialNodeInfo
     NextMessageId: int
@@ -95,12 +82,7 @@ type Node = {
     OnSeqKVCompareAndSwapOkHandlers : Map<MessageId, Node -> TransitionResult>
     OnSeqKVCompareAndSwapPreconditionFailedHandlers : Map<MessageId, Node -> TransitionResult>
 }
-and TransitionResult = Accumulator<Node, Message<OutputMessageBody>>
+and TransitionResult = GenericTransitionResult<Node, Message<OutputMessageBody>>
 
-type FutureTransition<'T> = (Node * 'T -> TransitionResult) -> TransitionResult
 
-type TransitionBuilder() =
-    inherit AccumulatorBuilder()
-    member this.Bind(x: FutureTransition<'T>, f: Node * 'T -> TransitionResult) : TransitionResult = x f
-    member this.Return(x: Node) : TransitionResult = x, []
-let transition = new TransitionBuilder()
+
