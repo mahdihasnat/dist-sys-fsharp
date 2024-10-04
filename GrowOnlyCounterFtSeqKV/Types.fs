@@ -96,3 +96,11 @@ type Node = {
     OnSeqKVCompareAndSwapPreconditionFailedHandlers : Map<MessageId, Node -> TransitionResult>
 }
 and TransitionResult = Accumulator<Node, Message<OutputMessageBody>>
+
+type FutureTransition<'T> = (Node * 'T -> TransitionResult) -> TransitionResult
+
+type TransitionBuilder() =
+    inherit AccumulatorBuilder()
+    member this.Bind(x: FutureTransition<'T>, f: Node * 'T -> TransitionResult) : TransitionResult = x f
+    member this.Return(x: Node) : TransitionResult = x, []
+let transition = new TransitionBuilder()
