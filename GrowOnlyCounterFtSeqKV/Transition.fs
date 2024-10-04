@@ -13,7 +13,7 @@ let genMessageId (node: Node) : Node * MessageId =
     },
     MessageId node.NextMessageId
 
-let withSeqKvSingleRead node (f : Node -> Value * Version -> Node * List<Message<OutputMessageBody>>) : Node * List<Message<OutputMessageBody>> =
+let withSeqKvSingleRead node (f : Node -> Value * Version -> TransitionResult) : TransitionResult =
     let node, queryMessageId = genMessageId node
     let seqKVReadMessageBody: OutputMessageBody =
         SeqKVOperation (KVRequestMessageBody.Read (queryMessageId, "sum"))
@@ -38,87 +38,98 @@ let withSeqKvSingleRead node (f : Node -> Value * Version -> Node * List<Message
         }
     node, [seqKVReadMessage]
 
-let withTransformValueAndVersion node (mapper: Value * Version -> Value * Version) (f: Node -> Value * Version -> Node * List<Message<OutputMessageBody>>) : Node * List<Message<OutputMessageBody>> =
-    let rec writeTransformedValue node (oldValueAndVersion) : Node * List<Message<OutputMessageBody>> =
-        let (node, updateMessageId: MessageId) = genMessageId node
-        let newValueAndVersion = mapper oldValueAndVersion
-        let updateMessageBody: OutputMessageBody =
-            SeqKVOperation (KVRequestMessageBody.CompareAndSwap (updateMessageId, "sum", oldValueAndVersion,  newValueAndVersion, fst oldValueAndVersion = Value 0))
-        let updateMessage =
-            {
-                Source = node.Info.NodeId
-                Destination = NodeId.SeqKv
-                MessageBody = updateMessageBody
-            }
+let withTransformValueAndVersion node (mapper: Value * Version -> Value * Version) (f: Node -> Value * Version -> TransitionResult) : TransitionResult =
 
-        let node =
-            {
-                node with
-                    OnSeqKVCompareAndSwapOkHandlers = node.OnSeqKVCompareAndSwapOkHandlers.Add(updateMessageId, (fun node -> f node newValueAndVersion))
-                    OnSeqKVCompareAndSwapPreconditionFailedHandlers = node.OnSeqKVCompareAndSwapPreconditionFailedHandlers.Add(updateMessageId, fun node -> withSeqKvSingleRead node writeTransformedValue)
-            }
-        node, [updateMessage]
+    let rec writeTransformedValue node (oldValueAndVersion) : TransitionResult =
+        accumulator {
+            let (node, updateMessageId: MessageId) = genMessageId node
+            let newValueAndVersion = mapper oldValueAndVersion
+            let updateMessageBody: OutputMessageBody =
+                SeqKVOperation (KVRequestMessageBody.CompareAndSwap (updateMessageId, "sum", oldValueAndVersion,  newValueAndVersion, fst oldValueAndVersion = Value 0))
+            yield
+                {
+                    Source = node.Info.NodeId
+                    Destination = NodeId.SeqKv
+                    MessageBody = updateMessageBody
+                }
+
+            let node =
+                {
+                    node with
+                        OnSeqKVCompareAndSwapOkHandlers = node.OnSeqKVCompareAndSwapOkHandlers.Add(updateMessageId, (fun node -> f node newValueAndVersion))
+                        OnSeqKVCompareAndSwapPreconditionFailedHandlers = node.OnSeqKVCompareAndSwapPreconditionFailedHandlers.Add(updateMessageId, fun node -> withSeqKvSingleRead node writeTransformedValue)
+                }
+            return node
+        }
 
     withSeqKvSingleRead node writeTransformedValue
 
-let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : Node * List<Message<OutputMessageBody>> =
-    match action with
-    | Choice2Of2 unit ->
-        node, []
-    | Choice1Of2 msg ->
-        match msg.MessageBody with
-        | Add(messageId, delta) ->
-            let replyAddOk node =
-                let outputMessageBody: OutputMessageBody =
-                    AddAck(messageId)
-                let outputMessage =
+let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : TransitionResult =
+    accumulator {
+        match action with
+        | Choice2Of2 unit ->
+            return node
+        | Choice1Of2 msg ->
+            match msg.MessageBody with
+            | Add(messageId, delta) ->
+                let replyAddOkMessage =
                     {
                         Source = node.Info.NodeId
                         Destination = msg.Source
-                        MessageBody = outputMessageBody
+                        MessageBody = AddAck(messageId)
                     }
-                node, [outputMessage]
 
-            if delta = Delta 0 then
-                replyAddOk node
-            else
-                withTransformValueAndVersion node (fun (value, _version) -> (value + delta, Version 0)) (fun node _ -> replyAddOk node)
-        | Read messageId ->
-            let replyReadOk node (value, _version) =
-                let outputMessageBody: OutputMessageBody =
-                    ReadAck(messageId, value)
-                let outputMessage =
-                    {
-                        Source = node.Info.NodeId
-                        Destination = msg.Source
-                        MessageBody = outputMessageBody
+                let replyAddOk (node) =
+                    accumulator {
+                        yield replyAddOkMessage
+                        return node
                     }
-                node, [outputMessage]
-            withTransformValueAndVersion node (fun (value, version) -> (value, version + 1)) replyReadOk
-        | KVResponse (KVResponseMessageBody.ReadOk(inReplyTo, value)) ->
-            node.OnSeqKVReadOkHandlers
-            |> Map.tryFind inReplyTo
-            |> Option.get
-            |> (fun f ->
-                f node value
-            )
-        | KVResponse (KVResponseMessageBody.ErrorKeyDoesNotExist inReplyTo) ->
-            node.OnSeqKVReadKeyDoesNotExistHandlers
-            |> Map.tryFind inReplyTo
-            |> Option.get
-            <| node
 
-        | KVResponse (KVResponseMessageBody.CompareAndSwapOk inReplyTo) ->
-            node.OnSeqKVCompareAndSwapOkHandlers
-            |> Map.tryFind inReplyTo
-            |> Option.get
-            <| node
-        | KVResponse (KVResponseMessageBody.WriteOk inReplyTo) ->
-            failwith "WriteOk handler not implemented"
-        | KVResponse (KVResponseMessageBody.ErrorPreconditionFailed inReplyTo) ->
-            node.OnSeqKVCompareAndSwapPreconditionFailedHandlers
-            |> Map.tryFind inReplyTo
-            |> Option.get
-            <| node
+                if delta = Delta 0 then
+                    return! replyAddOk node
+                else
+                    return! withTransformValueAndVersion node (fun (value, _version) -> (value + delta, Version 0)) (fun node _ -> replyAddOk node)
+            | Read messageId ->
+                let replyReadOk node (value, _version) =
+                    let outputMessageBody: OutputMessageBody =
+                        ReadAck(messageId, value)
+                    let outputMessage =
+                        {
+                            Source = node.Info.NodeId
+                            Destination = msg.Source
+                            MessageBody = outputMessageBody
+                        }
+                    node, [outputMessage]
+                return! withTransformValueAndVersion node (fun (value, version) -> (value, version + 1)) replyReadOk
+            | KVResponse (KVResponseMessageBody.ReadOk(inReplyTo, value)) ->
+                return!
+                    node.OnSeqKVReadOkHandlers
+                    |> Map.tryFind inReplyTo
+                    |> Option.get
+                    |> (fun f ->
+                        f node value
+                    )
+            | KVResponse (KVResponseMessageBody.ErrorKeyDoesNotExist inReplyTo) ->
+                return!
+                    node.OnSeqKVReadKeyDoesNotExistHandlers
+                    |> Map.tryFind inReplyTo
+                    |> Option.get
+                    <| node
 
+            | KVResponse (KVResponseMessageBody.CompareAndSwapOk inReplyTo) ->
+                return!
+                    node.OnSeqKVCompareAndSwapOkHandlers
+                    |> Map.tryFind inReplyTo
+                    |> Option.get
+                    <| node
+            | KVResponse (KVResponseMessageBody.WriteOk inReplyTo) ->
+                return!
+                    failwith "WriteOk handler not implemented"
+            | KVResponse (KVResponseMessageBody.ErrorPreconditionFailed inReplyTo) ->
+                return!
+                    node.OnSeqKVCompareAndSwapPreconditionFailedHandlers
+                    |> Map.tryFind inReplyTo
+                    |> Option.get
+                    <| node
+    }
 

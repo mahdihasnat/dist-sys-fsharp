@@ -73,12 +73,26 @@ with
             | SeqKVOperation x ->
                 KVRequestMessageBody<_>.ToJson x
 
+type Accumulator<'T, 'SideEffect> = 'T * List<'SideEffect>
+
+type AccumulatorBuilder() =
+    member this.Return(x: 'T) : Accumulator<'T, 'SideEffect> = x, []
+    member this.Yield(x: 'SideEffect) : Accumulator<unit, 'SideEffect> =
+        (), [x]
+    member this.Combine((x: unit, sideEffects1), (y, sideEffects2)) : Accumulator<'T, 'SideEffect> =
+        y, sideEffects1 @ sideEffects2
+    member this.Delay(f: unit -> Accumulator<'T, 'SideEffect>) : Accumulator<'T, 'SideEffect> = f ()
+    member this.ReturnFrom (x: Accumulator<'T, 'SideEffect>) = x
+
+let accumulator = new AccumulatorBuilder()
+
 type Node = {
     Info: InitialNodeInfo
     NextMessageId: int
 
-    OnSeqKVReadOkHandlers : Map<MessageId, Node -> Value * Version -> Node * List<Message<OutputMessageBody>>>
-    OnSeqKVReadKeyDoesNotExistHandlers : Map<MessageId, Node -> Node * List<Message<OutputMessageBody>>>
-    OnSeqKVCompareAndSwapOkHandlers : Map<MessageId, Node -> Node * List<Message<OutputMessageBody>>>
-    OnSeqKVCompareAndSwapPreconditionFailedHandlers : Map<MessageId, Node -> Node * List<Message<OutputMessageBody>>>
+    OnSeqKVReadOkHandlers : Map<MessageId, Node -> Value * Version -> TransitionResult>
+    OnSeqKVReadKeyDoesNotExistHandlers : Map<MessageId, Node -> TransitionResult>
+    OnSeqKVCompareAndSwapOkHandlers : Map<MessageId, Node -> TransitionResult>
+    OnSeqKVCompareAndSwapPreconditionFailedHandlers : Map<MessageId, Node -> TransitionResult>
 }
+and TransitionResult = Accumulator<Node, Message<OutputMessageBody>>
