@@ -11,6 +11,7 @@ open Fleece.SystemTextJson
 [<RequireQualifiedAccess>]
 type KVRequestMessageBody<'Value> =
     | Read of MessageId * Key: string
+    | Write of MessageId * Key: string * Value: 'Value
     | CompareAndSwap of MessageId * Key: string * From: 'Value * To: 'Value * CreateIfNotExists: bool
 with
     static member inline ToJson (x: KVRequestMessageBody<_>) =
@@ -20,6 +21,13 @@ with
                     "type" .= "read"
                     "msg_id" .= messageId
                     "key" .= key
+                ]
+            | KVRequestMessageBody.Write (messageId, key, ``value``) ->
+                jobj [
+                    "type" .= "write"
+                    "msg_id" .= messageId
+                    "key" .= key
+                    "value" .= ``value``
                 ]
             | KVRequestMessageBody.CompareAndSwap (messageId, key, from, ``to``, createIfNotExists) ->
                 jobj [
@@ -34,6 +42,7 @@ with
 [<RequireQualifiedAccess>]
 type KVResponseMessageBody<'Value> =
     | ReadOk of InReplyTo: MessageId * Value: 'Value
+    | WriteOk of InReplyTo: MessageId
     | CompareAndSwapOk of InReplyTo: MessageId
     | ErrorKeyDoesNotExist of InReplyTo: MessageId
     | ErrorPreconditionFailed of InReplyTo: MessageId
@@ -48,8 +57,10 @@ with
                     | s when s = "read_ok" ->
                         let! value = jget o "value"
                         return KVResponseMessageBody.ReadOk (inReplyTo, value)
+                    | s when s = "write_ok" ->
+                        return KVResponseMessageBody.WriteOk inReplyTo
                     | s when s = "cas_ok" ->
-                        return KVResponseMessageBody.CompareAndSwapOk (inReplyTo)
+                        return KVResponseMessageBody.CompareAndSwapOk inReplyTo
                     | s when s = "error" ->
                         let! (code: int) = jget o "code"
                         and! (text: string) = jget o "text"

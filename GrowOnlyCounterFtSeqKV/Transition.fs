@@ -113,7 +113,8 @@ let inline transition (node: Node) (action: Choice<Message<InputMessageBody>,uni
             |> Map.tryFind inReplyTo
             |> Option.get
             <| node
-
+        | KVResponse (KVResponseMessageBody.WriteOk inReplyTo) ->
+            failwith "WriteOk handler not implemented"
         | KVResponse (KVResponseMessageBody.ErrorPreconditionFailed inReplyTo) ->
             node.OnSeqKVCompareAndSwapPreconditionFailedHandlers
             |> Map.tryFind inReplyTo

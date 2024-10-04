@@ -27,7 +27,7 @@ let refreshLog (logKey: LogKey) node (f : Node -> TransitionResult) : Transition
             match node.CachedMessages.TryFind logKey with
             | None -> Offset 0
             | Some messages ->
-                    Offset messages.Length
+                    Offset messages.Count
         let seqKVReadLogMessageBody: OutputMessageBody =
             KVRequest (KVRequestMessageBody.Read (queryMessageId, logIndex logKey nextOffset))
         let seqKVReadLogMessage =
@@ -38,10 +38,9 @@ let refreshLog (logKey: LogKey) node (f : Node -> TransitionResult) : Transition
             }
         let node = node.RegisterReadOkHandler queryMessageId (fun node (Value value) ->
             let updatedLogs =
-                if node.CachedMessages.TryFind logKey |> Option.defaultValue List.empty |> List.contains (nextOffset, LogValue value) then
-                    node.CachedMessages.TryFind logKey |> Option.defaultValue List.empty
-                else
-                    (nextOffset, LogValue value) :: (node.CachedMessages.TryFind logKey |> Option.defaultValue List.empty)
+                node.CachedMessages.TryFind logKey
+                |> Option.defaultValue Map.empty
+                |> Map.add nextOffset (LogValue value)
 
             let node = { node with CachedMessages = node.CachedMessages.Add(logKey, updatedLogs) }
             refreshLogsNext node
@@ -59,9 +58,8 @@ let rec refreshLogs (logKeys: List<LogKey>) node (f : Node -> TransitionResult) 
 let assertConsistency (node: Node) : unit =
     node.CachedMessages
     |> Map.forall (fun logKey values ->
-        values
-        |> List.map fst
-        |> List.rev
+        values.Keys
+        |> Seq.toList
         |> fun offsets ->
             offsets = List.init offsets.Length (fun i -> Offset i)
     )
@@ -69,7 +67,6 @@ let assertConsistency (node: Node) : unit =
         eprintfn "assertConsistency: %A" x
         if x = false then
             failwithf "assertConsistency failed"
-
 
 let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : TransitionResult =
     assertConsistency node
@@ -82,7 +79,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
             // read current offset from lin-kv
             // increment current offsets from lin-kv
             // write log value to seq-kv
-            let writeLogOkHandler (node: Node) (offset: Offset) : TransitionResult =
+            let replySendOk (node: Node) (offset: Offset) : TransitionResult =
                 let sendOkReplyMessageBody =
                     OutputMessageBody.SendAck (messageId, offset)
                 let sendOkReplyMessage =
@@ -94,24 +91,24 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                 eprintfn $"send: key: %A{key} value: %A{value} send_ok reply on {offset}"
                 node, [sendOkReplyMessage]
 
-            let incrementOffsetOkHandler (node: Node) (offset: Offset) : TransitionResult =
+            let withWriteLog (node: Node) (offset: Offset) : TransitionResult =
                 let node, writeLogMessageId = genMessageId node
                 let seqKVWriteMessageBody: OutputMessageBody =
-                    KVRequest (KVRequestMessageBody.CompareAndSwap (writeLogMessageId, logIndex key offset, Value 0, Value value.Value, true))
+                    KVRequest (KVRequestMessageBody.Write (writeLogMessageId, logIndex key offset, Value value.Value))
                 let seqKVWriteMessage =
                     {
                         Source = node.Info.NodeId
                         Destination = NodeId.SeqKv
                         MessageBody = seqKVWriteMessageBody
                     }
-                let node = node.RegisterCompareAndSwapOkHandler writeLogMessageId (fun node -> writeLogOkHandler node offset)
+                let node = node.RegisterWriteOkHandler writeLogMessageId (fun node -> replySendOk node offset)
                 eprintfn $"send: key: %A{key} value: %A{value} seq-kv write log in {offset} logIndex: {logIndex key offset}"
                 node, [seqKVWriteMessage]
 
-            let withLatestOffsetRead node (f: Node -> Offset -> TransitionResult) : TransitionResult =
+            let withLatestOffsetRead (key: LogKey) node (f: Node -> Offset -> TransitionResult) : TransitionResult =
                 let node, queryMessageId = genMessageId node
                 let linKVReadMessageBody: OutputMessageBody =
-                    KVRequest (KVRequestMessageBody.Read (queryMessageId, key.Value))
+                    KVRequest (KVRequestMessageBody.Read (queryMessageId, $"current_offset_{key.Value}"))
                 let linKVReadMessage =
                     {
                         Source = node.Info.NodeId
@@ -121,26 +118,26 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
 
                 let node = node.RegisterReadOkHandler queryMessageId (fun node (Value value) -> f node (Offset value))
                 let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node -> f node (Offset -1))
-                eprintfn $"send: key: %A{key} value: %A{value} lin-kv-read"
+                eprintfn $"send: key: %A{key} value: %A{value} lin-kv read offset"
                 node, [linKVReadMessage]
 
-            let rec latestOffsetReadOkHandler (node: Node) (Offset offset) : TransitionResult =
+            let rec withIncrementOffsetWrite (node: Node) (Offset offset) : TransitionResult =
                 let nextOffset = Offset (offset + 1)
                 let node, updateMessageId = genMessageId node
                 let linKVWriteMessageBody: OutputMessageBody =
-                    KVRequest (KVRequestMessageBody.CompareAndSwap (updateMessageId, key.Value, Value offset, Value nextOffset.Value, nextOffset.Value = 0))
+                    KVRequest (KVRequestMessageBody.CompareAndSwap (updateMessageId, $"current_offset_{key.Value}", Value offset, Value nextOffset.Value, nextOffset.Value = 0))
                 let linKVWriteMessage =
                     {
                         Source = node.Info.NodeId
                         Destination = NodeId.LinKv
                         MessageBody = linKVWriteMessageBody
                     }
-                let node = node.RegisterCompareAndSwapOkHandler updateMessageId (fun node -> incrementOffsetOkHandler node nextOffset)
-                let node = node.RegisterErrorPreconditionFailedHandler updateMessageId (fun node -> withLatestOffsetRead node latestOffsetReadOkHandler)
+                let node = node.RegisterCompareAndSwapOkHandler updateMessageId (fun node -> withWriteLog node nextOffset)
+                let node = node.RegisterErrorPreconditionFailedHandler updateMessageId (fun node -> withLatestOffsetRead key node withIncrementOffsetWrite)
                 eprintfn $"send: key: %A{key} value: %A{value} cas write to {offset + 1}"
                 node, [linKVWriteMessage]
 
-            withLatestOffsetRead node latestOffsetReadOkHandler
+            withLatestOffsetRead key node withIncrementOffsetWrite
 
         | InputMessageBody.Poll (messageId, offsets) ->
 
@@ -149,7 +146,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                     offsets
                     |> Map.choosei (fun key offset ->
                         node.CachedMessages.TryFind key
-                        |> Option.map (List.filter (fun (offset', _) -> offset <= offset') >> List.sortBy fst)
+                        |> Option.map (Map.filter (fun offset' _ -> offset <= offset') >> Map.toList)
                     )
                 messages
                 |> Map.iter (fun key messages ->
@@ -176,6 +173,24 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                 (node, [ replyMessage ])
             refreshLogs (offsets.Keys |> List.ofSeq) node onRefreshLogsCompleted
         | InputMessageBody.CommitOffsets(messageId, offsets) ->
+
+            let writeMessages, node =
+                offsets
+                |> Map.toList
+                |> List.mapFold (fun node (key, Offset offset) ->
+                    let node, updateMessageId = genMessageId node
+                    let linKVWriteMessageBody: OutputMessageBody =
+                        KVRequest (KVRequestMessageBody.Write (updateMessageId, "committed_offset_" + key.Value, Value offset))
+                    let linKVWriteMessage =
+                        {
+                            Source = node.Info.NodeId
+                            Destination = NodeId.LinKv
+                            MessageBody = linKVWriteMessageBody
+                        }
+                    let node = node.RegisterWriteOkHandler updateMessageId (fun node -> node, [])
+                    linKVWriteMessage, node
+                ) node
+
             let replyMessageBody: OutputMessageBody =
                 CommitOffsetsAck (messageId)
             let replyMessage: Message<OutputMessageBody> =
@@ -184,56 +199,112 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                     Destination = msg.Source
                     MessageBody = replyMessageBody
                 }
-            let node =
-                {
-                    node with
-                        CachedCommittedOffsets =
-                            (node.CachedCommittedOffsets, offsets)
-                            ||> Map.fold (fun acc key offset ->
-                                match acc.TryFind key with
-                                | Some offset' -> acc.Add (key, max offset offset')
-                                | None -> acc.Add (key, offset)
-                            )
-                }
-            (node, [ replyMessage ])
+            (node, replyMessage :: writeMessages)
+
         | InputMessageBody.ListCommittedOffsets(messageId, keys) ->
-            let offsets =
+
+            let queryMessages, node =
                 keys
                 |> NonEmptyList.toList
-                |> List.choose (fun key ->
-                    node.CachedCommittedOffsets.TryFind key
-                    |> Option.map (fun offset -> (key, offset))
-                )
-                |> Map.ofList
-            let replyMessageBody: OutputMessageBody =
-                ListCommittedOffsetsAck (messageId, offsets)
-            let replyMessage: Message<OutputMessageBody> =
-                {
-                    Source = node.Info.NodeId
-                    Destination = msg.Source
-                    MessageBody = replyMessageBody
-                }
-            (node, [ replyMessage ])
+                |> List.mapFold (fun node logKey ->
+                    let node, messageId = genMessageId node
+                    let queryOffsetMessageBody =
+                        KVRequest (KVRequestMessageBody.Read (messageId, "committed_offset_" + logKey.Value))
+                    let queryOffsetMessage : Message<OutputMessageBody> =
+                        {
+                            Source = node.Info.NodeId
+                            Destination = NodeId.LinKv
+                            MessageBody = queryOffsetMessageBody
+                        }
+                    ((logKey, messageId), queryOffsetMessage), node
+                ) node
+
+            let replyListCommittedOffsets (offsets: Map<LogKey, Offset>) (node: Node) =
+                let replyMessageBody: OutputMessageBody =
+                    ListCommittedOffsetsAck (messageId, offsets)
+                let replyMessage: Message<OutputMessageBody> =
+                    {
+                        Source = node.Info.NodeId
+                        Destination = msg.Source
+                        MessageBody = replyMessageBody
+                    }
+                node, [ replyMessage ]
+
+            let rec responseMessageHandler (awaitingResponses: List<LogKey * MessageId>) (offsets: Map<LogKey, Offset>) (logKey, maybeOffset: Option<Offset>) (node: Node) : TransitionResult =
+                let awaitingResponses = List.filter (fun x -> fst x <> logKey) awaitingResponses
+                let offsets =
+                    maybeOffset
+                    |> Option.map (fun offset -> offsets.Add (logKey, offset))
+                    |> Option.defaultValue offsets
+                if awaitingResponses = [] then
+                    replyListCommittedOffsets offsets node
+                else
+                    let node = registerAllCallbacks awaitingResponses offsets node
+                    node, []
+            and registerAllCallbacks (awaitingResponses: List<LogKey * MessageId>) (offsets: Map<LogKey, Offset>) (node: Node) : Node =
+                awaitingResponses
+                |> List.fold (fun (node: Node) (logKey, messageId) ->
+                    let node = node.RegisterReadOkHandler messageId (fun node (Value value) -> responseMessageHandler awaitingResponses offsets (logKey, Some <| Offset value) node)
+                    let node = node.RegisterErrorKeyDoesNotExistHandler messageId (fun node -> responseMessageHandler awaitingResponses offsets (logKey, None) node)
+                    node
+                ) node
+
+            let awaitingResponses =
+                queryMessages
+                |> List.map fst
+
+            let node =
+                registerAllCallbacks awaitingResponses Map.empty node
+
+            node, queryMessages |> List.map snd
+
         | InputMessageBody.KVResponse response ->
             match response with
             | KVResponseMessageBody.ReadOk(inReplyTo, value) ->
                 node.OnKVReadOkHandlers.TryFind inReplyTo
                 |> Option.get
-                |> fun f -> f node value
+                |> fun f -> f { node with OnKVWriteOkHandlers = node.OnKVWriteOkHandlers.Remove inReplyTo } value
+            | KVResponseMessageBody.WriteOk inReplyTo ->
+                node.OnKVWriteOkHandlers.TryFind inReplyTo
+                |> Option.get
+                <| { node with OnKVWriteOkHandlers = node.OnKVWriteOkHandlers.Remove inReplyTo }
             | KVResponseMessageBody.ErrorKeyDoesNotExist inReplyTo ->
                 node.OnKVErrorKeyDoesNotExistHandlers.TryFind inReplyTo
                 |> Option.get
-                <| node
+                <| { node with OnKVErrorKeyDoesNotExistHandlers = node.OnKVErrorKeyDoesNotExistHandlers.Remove inReplyTo }
             | KVResponseMessageBody.CompareAndSwapOk inReplyTo ->
                 node.OnKVCompareAndSwapOkHandlers.TryFind inReplyTo
                 |> Option.get
-                <| node
+                <| { node with OnKVCompareAndSwapOkHandlers = node.OnKVCompareAndSwapOkHandlers.Remove inReplyTo }
             | KVResponseMessageBody.ErrorPreconditionFailed inReplyTo ->
                 node.OnKVErrorPreconditionFailedHandlers.TryFind inReplyTo
                 |> Option.get
-                <| node
+                <| { node with OnKVErrorPreconditionFailedHandlers = node.OnKVErrorPreconditionFailedHandlers.Remove inReplyTo }
 
 let transitionOuter (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : TransitionResult =
-    let oldNode = node
+
+    // node.OnKVWriteOkHandlers.Keys |> Seq.map string |> String.concat ","
+    // |> eprintfn "write ok keys: %A"
+    // node.OnKVCompareAndSwapOkHandlers.Keys |> Seq.map string |> String.concat ","
+    // |> eprintfn "cas ok keys: %A"
+    // node.OnKVReadOkHandlers.Keys |> Seq.map string |> String.concat ","
+    // |> eprintfn "read ok keys: %A"
+    // node.OnKVErrorKeyDoesNotExistHandlers.Keys |> Seq.map string |> String.concat ","
+    // |> eprintfn "error key does not exist keys: %A"
+    // node.OnKVErrorPreconditionFailedHandlers.Keys |> Seq.map string |> String.concat ","
+    // |> eprintfn "error precondition failed keys: %A"
+
     let node, messages = transition node action
+
+    // node.OnKVWriteOkHandlers.Keys |> Seq.map string |> String.concat ","
+    // |> eprintfn "write ok keys: %A"
+    // node.OnKVCompareAndSwapOkHandlers.Keys |> Seq.map string |> String.concat ","
+    // |> eprintfn "cas ok keys: %A"
+    // node.OnKVReadOkHandlers.Keys |> Seq.map string |> String.concat ","
+    // |> eprintfn "read ok keys: %A"
+    // node.OnKVErrorKeyDoesNotExistHandlers.Keys |> Seq.map string |> String.concat ","
+    // |> eprintfn "error key does not exist keys: %A"
+    // node.OnKVErrorPreconditionFailedHandlers.Keys |> Seq.map string |> String.concat ","
+    // |> eprintfn "error precondition failed keys: %A"
+
     node, messages

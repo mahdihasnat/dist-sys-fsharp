@@ -122,24 +122,27 @@ type Node = {
     Info : InitialNodeInfo
     NextMessageId: int
 
-    CachedMessages: Map<LogKey, List<Offset * LogValue>>
-    CachedCommittedOffsets: Map<LogKey, Offset>
+    CachedMessages: Map<LogKey, Map<Offset, LogValue>>
 
     OnKVReadOkHandlers : Map<MessageId, Node -> Value -> TransitionResult>
+    OnKVWriteOkHandlers : Map<MessageId, Node -> TransitionResult>
     OnKVErrorKeyDoesNotExistHandlers : Map<MessageId, Node -> TransitionResult>
     OnKVCompareAndSwapOkHandlers : Map<MessageId, Node -> TransitionResult>
     OnKVErrorPreconditionFailedHandlers : Map<MessageId, Node -> TransitionResult>
 }
 with
     member this.RegisterReadOkHandler (messageId: MessageId) (handler: Node -> Value -> TransitionResult) =
-        { this with OnKVReadOkHandlers = this.OnKVReadOkHandlers.Add(messageId, handler) }
+        { this with OnKVReadOkHandlers = this.OnKVReadOkHandlers.Add (messageId, handler) }
+
+    member this.RegisterWriteOkHandler (messageId: MessageId) (handler: Node -> TransitionResult) =
+        { this with OnKVWriteOkHandlers = this.OnKVWriteOkHandlers.Add (messageId, handler) }
 
     member this.RegisterErrorKeyDoesNotExistHandler (messageId: MessageId) (handler: Node -> TransitionResult) =
-        { this with OnKVErrorKeyDoesNotExistHandlers = this.OnKVErrorKeyDoesNotExistHandlers.Add(messageId, handler) }
+        { this with OnKVErrorKeyDoesNotExistHandlers = this.OnKVErrorKeyDoesNotExistHandlers.Add (messageId, handler) }
 
     member this.RegisterCompareAndSwapOkHandler (messageId: MessageId) (handler: Node -> TransitionResult) =
-        { this with OnKVCompareAndSwapOkHandlers = this.OnKVCompareAndSwapOkHandlers.Add(messageId, handler) }
+        { this with OnKVCompareAndSwapOkHandlers = this.OnKVCompareAndSwapOkHandlers.Add (messageId, handler) }
 
     member this.RegisterErrorPreconditionFailedHandler (messageId: MessageId) (handler: Node -> TransitionResult) =
-        { this with OnKVErrorPreconditionFailedHandlers = this.OnKVErrorPreconditionFailedHandlers.Add(messageId, handler) }
+        { this with OnKVErrorPreconditionFailedHandlers = this.OnKVErrorPreconditionFailedHandlers.Add (messageId, handler) }
 and TransitionResult = Node * List<Message<OutputMessageBody>>

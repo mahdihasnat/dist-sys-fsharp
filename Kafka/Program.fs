@@ -23,16 +23,16 @@ let main args =
                 Info = nodeInfo
                 NextMessageId = 0
                 CachedMessages = Map.empty
-                CachedCommittedOffsets = Map.empty
 
                 OnKVReadOkHandlers = Map.empty
+                OnKVWriteOkHandlers = Map.empty
                 OnKVErrorKeyDoesNotExistHandlers = Map.empty
                 OnKVCompareAndSwapOkHandlers = Map.empty
                 OnKVErrorPreconditionFailedHandlers = Map.empty
             }
     let task1 = processStdin
                     (nodeRef, semaphore)
-                    transition
+                    transitionOuter
     let async1 = task1 |> Async.AwaitTask
     // let task2 = repeatSchedule
     //                 (TimeSpan.FromMilliseconds 100)
