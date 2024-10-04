@@ -43,9 +43,9 @@ let refreshLog (logKey: LogKey) node (f : Node -> TransitionResult) : Transition
                 |> Map.add nextOffset (LogValue value)
 
             let node = { node with CachedMessages = node.CachedMessages.Add(logKey, updatedLogs) }
-            refreshLogsNext node
+            refreshLogsNext (node.UnregisterErrorKeyDoesNotExistHandler queryMessageId)
         )
-        let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId f
+        let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node -> f (node.UnregisterReadOkHandler queryMessageId))
         node, [seqKVReadLogMessage]
     refreshLogsNext node
 
@@ -116,8 +116,8 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                         MessageBody = linKVReadMessageBody
                     }
 
-                let node = node.RegisterReadOkHandler queryMessageId (fun node (Value value) -> f node (Offset value))
-                let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node -> f node (Offset -1))
+                let node = node.RegisterReadOkHandler queryMessageId (fun node (Value value) -> f (node.UnregisterErrorKeyDoesNotExistHandler queryMessageId) (Offset value))
+                let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node -> f (node.UnregisterReadOkHandler queryMessageId) (Offset -1))
                 eprintfn $"send: key: %A{key} value: %A{value} lin-kv read offset"
                 node, [linKVReadMessage]
 
@@ -132,8 +132,8 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                         Destination = NodeId.LinKv
                         MessageBody = linKVWriteMessageBody
                     }
-                let node = node.RegisterCompareAndSwapOkHandler updateMessageId (fun node -> withWriteLog node nextOffset)
-                let node = node.RegisterErrorPreconditionFailedHandler updateMessageId (fun node -> withLatestOffsetRead key node withIncrementOffsetWrite)
+                let node = node.RegisterCompareAndSwapOkHandler updateMessageId (fun node -> withWriteLog (node.UnregisterErrorPreconditionFailedHandler updateMessageId) nextOffset)
+                let node = node.RegisterErrorPreconditionFailedHandler updateMessageId (fun node -> withLatestOffsetRead key (node.UnregisterCompareAndSwapOkHandler updateMessageId) withIncrementOffsetWrite)
                 eprintfn $"send: key: %A{key} value: %A{value} cas write to {offset + 1}"
                 node, [linKVWriteMessage]
 
@@ -244,8 +244,8 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
             and registerAllCallbacks (awaitingResponses: List<LogKey * MessageId>) (offsets: Map<LogKey, Offset>) (node: Node) : Node =
                 awaitingResponses
                 |> List.fold (fun (node: Node) (logKey, messageId) ->
-                    let node = node.RegisterReadOkHandler messageId (fun node (Value value) -> responseMessageHandler awaitingResponses offsets (logKey, Some <| Offset value) node)
-                    let node = node.RegisterErrorKeyDoesNotExistHandler messageId (fun node -> responseMessageHandler awaitingResponses offsets (logKey, None) node)
+                    let node = node.RegisterReadOkHandler messageId (fun node (Value value) -> responseMessageHandler awaitingResponses offsets (logKey, Some <| Offset value) (node.UnregisterErrorKeyDoesNotExistHandler messageId))
+                    let node = node.RegisterErrorKeyDoesNotExistHandler messageId (fun node -> responseMessageHandler awaitingResponses offsets (logKey, None) (node.UnregisterReadOkHandler messageId))
                     node
                 ) node
 
@@ -296,15 +296,15 @@ let transitionOuter (node: Node) (action: Choice<Message<InputMessageBody>,unit>
 
     let node, messages = transition node action
 
-    // node.OnKVWriteOkHandlers.Keys |> Seq.map string |> String.concat ","
-    // |> eprintfn "write ok keys: %A"
-    // node.OnKVCompareAndSwapOkHandlers.Keys |> Seq.map string |> String.concat ","
-    // |> eprintfn "cas ok keys: %A"
-    // node.OnKVReadOkHandlers.Keys |> Seq.map string |> String.concat ","
-    // |> eprintfn "read ok keys: %A"
-    // node.OnKVErrorKeyDoesNotExistHandlers.Keys |> Seq.map string |> String.concat ","
-    // |> eprintfn "error key does not exist keys: %A"
-    // node.OnKVErrorPreconditionFailedHandlers.Keys |> Seq.map string |> String.concat ","
-    // |> eprintfn "error precondition failed keys: %A"
+    node.OnKVWriteOkHandlers.Keys |> Seq.map string |> String.concat ","
+    |> eprintfn "write ok keys: %A"
+    node.OnKVCompareAndSwapOkHandlers.Keys |> Seq.map string |> String.concat ","
+    |> eprintfn "cas ok keys: %A"
+    node.OnKVReadOkHandlers.Keys |> Seq.map string |> String.concat ","
+    |> eprintfn "read ok keys: %A"
+    node.OnKVErrorKeyDoesNotExistHandlers.Keys |> Seq.map string |> String.concat ","
+    |> eprintfn "error key does not exist keys: %A"
+    node.OnKVErrorPreconditionFailedHandlers.Keys |> Seq.map string |> String.concat ","
+    |> eprintfn "error precondition failed keys: %A"
 
     node, messages

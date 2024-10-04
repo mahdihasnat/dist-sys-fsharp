@@ -134,15 +134,29 @@ with
     member this.RegisterReadOkHandler (messageId: MessageId) (handler: Node -> Value -> TransitionResult) =
         { this with OnKVReadOkHandlers = this.OnKVReadOkHandlers.Add (messageId, handler) }
 
+    member this.UnregisterReadOkHandler (messageId: MessageId) =
+        { this with OnKVReadOkHandlers = this.OnKVReadOkHandlers.Remove messageId }
+
     member this.RegisterWriteOkHandler (messageId: MessageId) (handler: Node -> TransitionResult) =
         { this with OnKVWriteOkHandlers = this.OnKVWriteOkHandlers.Add (messageId, handler) }
+
+    member this.UnregisterWriteOkHandler (messageId: MessageId) =
+        { this with OnKVWriteOkHandlers = this.OnKVWriteOkHandlers.Remove messageId }
 
     member this.RegisterErrorKeyDoesNotExistHandler (messageId: MessageId) (handler: Node -> TransitionResult) =
         { this with OnKVErrorKeyDoesNotExistHandlers = this.OnKVErrorKeyDoesNotExistHandlers.Add (messageId, handler) }
 
+    member this.UnregisterErrorKeyDoesNotExistHandler (messageId: MessageId) =
+        { this with OnKVErrorKeyDoesNotExistHandlers = this.OnKVErrorKeyDoesNotExistHandlers.Remove messageId }
+
     member this.RegisterCompareAndSwapOkHandler (messageId: MessageId) (handler: Node -> TransitionResult) =
         { this with OnKVCompareAndSwapOkHandlers = this.OnKVCompareAndSwapOkHandlers.Add (messageId, handler) }
 
+    member this.UnregisterCompareAndSwapOkHandler (messageId: MessageId) =
+        { this with OnKVCompareAndSwapOkHandlers = this.OnKVCompareAndSwapOkHandlers.Remove messageId }
+
     member this.RegisterErrorPreconditionFailedHandler (messageId: MessageId) (handler: Node -> TransitionResult) =
         { this with OnKVErrorPreconditionFailedHandlers = this.OnKVErrorPreconditionFailedHandlers.Add (messageId, handler) }
+    member this.UnregisterErrorPreconditionFailedHandler (messageId: MessageId) =
+        { this with OnKVErrorPreconditionFailedHandlers = this.OnKVErrorPreconditionFailedHandlers.Remove messageId }
 and TransitionResult = Node * List<Message<OutputMessageBody>>
