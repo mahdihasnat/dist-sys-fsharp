@@ -131,35 +131,40 @@ let writeToKVServiceAndForget (node: Node) (target: NodeId) (key: string) (value
         return! f node
     }
 
-let refreshLog (logKey: LogKey) node (f : Node -> TransitionResult) : TransitionResult =
-    let rec refreshLogsNext (node: Node) : TransitionResult =
+let getLogs (logKey: LogKey) (node: Node) (f: Node -> TransitionResult) : TransitionResult =
+    let rec refreshLogsNext (offset: Offset) (node: Node) : TransitionResult  =
         transition {
             let node, queryMessageId = genMessageId node
-            let nextOffset =
-                match node.CachedMessages.TryFind logKey with
-                | None -> Offset 0
-                | Some messages ->
-                        Offset messages.Count
-            let! node, res = readFromKVService node NodeId.SeqKv (logIndex logKey nextOffset)
+            let! node, res = readFromKVService node NodeId.SeqKv (logIndex logKey offset)
             match res with
             | Ok (Value value) ->
-                let updatedLogs =
-                    node.CachedMessages.TryFind logKey
-                    |> Option.defaultValue Map.empty
-                    |> Map.add nextOffset (LogValue value)
-
-                let node = { node with CachedMessages = node.CachedMessages.Add(logKey, updatedLogs) }
-                return! refreshLogsNext node
+                let node = { node with CachedMessages = node.CachedMessages.Add(logKey, node.CachedMessages.TryFind logKey
+                                                                                            |> Option.defaultValue Map.empty
+                                                                                            |> Map.add offset (LogValue value)) }
+                return! refreshLogsNext (Offset (offset.Value + 1)) node
             | Error () ->
+                eprintfn $"getLogs:: logKey: {logKey} offset: {offset} read failed"
                 return! f node
         }
-    refreshLogsNext node
+    refreshLogsNext (Offset (node.CachedMessages |> Map.tryFind logKey |> Option.defaultValue Map.empty).Count) node
 
 let rec refreshLogs (logKeys: List<LogKey>) node (f : Node -> TransitionResult) : TransitionResult =
-    match logKeys with
-    | [] -> f node
-    | x :: xs ->
-        refreshLog x node (fun node -> refreshLogs xs node f)
+    let (remainingKeys: ref<List<LogKey>>) = ref logKeys
+    let rec refreshLogHandler (logKey: LogKey) (node: Node) : TransitionResult =
+        remainingKeys.Value <- List.filter ((<>) logKey) remainingKeys.Value
+        if remainingKeys.Value = [] then
+            f node
+        else
+            node, []
+
+    logKeys
+    |> List.fold (fun nodeTR logKey ->
+        transition {
+            let! node = nodeTR
+            let! node = getLogs logKey node (fun node -> refreshLogHandler logKey node)
+            return node
+        }
+    ) (node, [])
 
 let assertConsistency (node: Node) : unit =
     node.CachedMessages
@@ -239,38 +244,21 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                 return! withLatestOffsetRead key node withIncrementOffsetWrite
 
             | InputMessageBody.Poll (messageId, offsets) ->
-
-                let onRefreshLogsCompleted node : TransitionResult =
-                    let messages: Map<LogKey, List<Offset * LogValue>> =
-                        offsets
-                        |> Map.choosei (fun key offset ->
-                            node.CachedMessages.TryFind key
-                            |> Option.map (Map.filter (fun offset' _ -> offset <= offset') >> Map.toList)
-                        )
-                    messages
-                    |> Map.iter (fun key messages ->
-
+                let! node = refreshLogs (offsets.Keys |> List.ofSeq) node
+                let messages: Map<LogKey, List<Offset * LogValue>> =
+                    offsets
+                    |> Map.choosei (fun key offset ->
                         node.CachedMessages.TryFind key
-                        |> Option.map (eprintfn "key:%A: %A" key)
-                        |> Option.defaultValue ()
-
-                        let uniq = messages |> List.map fst |> List.distinct
-                        if uniq.Length <> messages.Length then
-                            eprintfn "key:%A: mesages %A" key messages
-                            eprintfn "key:%A: uniq %A" key uniq
-                            failwith "assertion failed"
-                        assert (uniq.Length = messages.Length)
+                        |> Option.map (Map.filter (fun offset' _ -> offset <= offset') >> Map.toList)
                     )
-                    let replyMessageBody: OutputMessageBody =
-                        PollAck (messageId, messages)
-                    let replyMessage: Message<OutputMessageBody> =
-                        {
-                            Source = node.Info.NodeId
-                            Destination = msg.Source
-                            MessageBody = replyMessageBody
-                        }
-                    (node, [ replyMessage ])
-                return! refreshLogs (offsets.Keys |> List.ofSeq) node onRefreshLogsCompleted
+                yield
+                    {
+                        Source = node.Info.NodeId
+                        Destination = msg.Source
+                        MessageBody = PollAck (messageId, messages)
+                    }
+                return node
+
             | InputMessageBody.CommitOffsets(messageId, offsets) ->
 
                 let! node =
@@ -283,13 +271,11 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                             return node
                         }
                     ) (transition { return node })
-                let replyMessageBody: OutputMessageBody =
-                    CommitOffsetsAck (messageId)
                 yield
                     {
                         Source = node.Info.NodeId
                         Destination = msg.Source
-                        MessageBody = replyMessageBody
+                        MessageBody = CommitOffsetsAck (messageId)
                     }
                 return node
 
