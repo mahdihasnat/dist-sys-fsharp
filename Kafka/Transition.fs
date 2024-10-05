@@ -35,6 +35,73 @@ let readFromKVService (node: Node) (target: NodeId) (key: string) (f : Node * Re
         return node
     }
 
+let readFromKVServiceInParallel (node: Node) (targets: NonEmptyList<NodeId * string>) (f: Node * NonEmptyList<Result<Value, unit>> -> TransitionResult) : TransitionResult =
+    transition {
+        let! node, revQueryMessageIds =
+            targets
+            |> NonEmptyList.toList
+            |> List.fold (fun nodeAndMsgIdTR (destination, key) ->
+                transition {
+                    let! node, queryMessageIds = nodeAndMsgIdTR
+                    let node, queryMessageId = genMessageId node
+                    let kvReadMessageBody: OutputMessageBody =
+                        KVRequest (KVRequestMessageBody.Read (queryMessageId, key))
+                    yield
+                        {
+                            Source = node.Info.NodeId
+                            Destination = destination
+                            MessageBody = kvReadMessageBody
+                        }
+                    return node, queryMessageId::queryMessageIds
+                }
+            ) ((node, []), [])
+        let queryMessageResults: List<Choice<MessageId, Result<Value, unit>>> =
+            revQueryMessageIds
+            |> List.rev
+            |> List.map Choice1Of2
+
+        let rec handleResponse (results: List<Choice<MessageId, Result<Value, unit>>>) (node: Node) (queryId: MessageId, res: Result<Value, unit>) : TransitionResult =
+            transition {
+                let results =
+                    results
+                    |> List.map (fun state ->
+                        match state with
+                        | Choice1Of2 messageId ->
+                            if messageId = queryId then
+                                Choice2Of2 res
+                            else
+                                state
+                        | Choice2Of2 valueResult ->
+                            state
+                    )
+                let responses =
+                    results
+                    |> List.choose (fun state ->
+                        match state with
+                        | Choice2Of2 valueResult -> Some valueResult
+                        | Choice1Of2 _ -> None
+                    )
+                if responses.Length <> results.Length then
+                    let node = registerAllCallbacks results node
+                    return node
+                else
+                    return! f (node, responses |> NonEmptyList.ofList)
+            }
+        and registerAllCallbacks (results: List<Choice<MessageId, Result<Value, unit>>>) (node: Node) : Node =
+            results
+            |> List.fold (fun node state ->
+                match state with
+                | Choice1Of2 messageId ->
+                    let node = node.RegisterReadOkHandler messageId (fun node value -> handleResponse results node (messageId, Ok value))
+                    let node = node.RegisterErrorKeyDoesNotExistHandler messageId (fun node -> handleResponse results node (messageId, Error ()))
+                    node
+                | Choice2Of2 valueResult ->
+                    node
+            ) node
+        let node = registerAllCallbacks queryMessageResults node
+        return node
+    }
+
 let writeToKVServiceAndWait (node: Node) (target: NodeId) (key: string) (value: Value) (f : Node -> TransitionResult) : TransitionResult =
     transition {
         let node, queryMessageId = genMessageId node
@@ -227,61 +294,25 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                 return node
 
             | InputMessageBody.ListCommittedOffsets(messageId, keys) ->
-
-                let queryMessages, node =
-                    keys
+                let! node, responses = readFromKVServiceInParallel node (keys |> NonEmptyList.map (fun key -> NodeId.LinKv, "committed_offset_" + key.Value))
+                let offsets =
+                    responses
+                    |> NonEmptyList.zip keys
                     |> NonEmptyList.toList
-                    |> List.mapFold (fun node logKey ->
-                        let node, messageId = genMessageId node
-                        let queryOffsetMessageBody =
-                            KVRequest (KVRequestMessageBody.Read (messageId, "committed_offset_" + logKey.Value))
-                        let queryOffsetMessage : Message<OutputMessageBody> =
-                            {
-                                Source = node.Info.NodeId
-                                Destination = NodeId.LinKv
-                                MessageBody = queryOffsetMessageBody
-                            }
-                        ((logKey, messageId), queryOffsetMessage), node
-                    ) node
+                    |> List.choose (fun (key, response) ->
+                        match response with
+                        | Ok (Value value) -> Some (key, Offset value)
+                        | Error () -> None
+                    )
+                    |> Map.ofList
 
-                let replyListCommittedOffsets (offsets: Map<LogKey, Offset>) (node: Node) =
-                    let replyMessageBody: OutputMessageBody =
-                        ListCommittedOffsetsAck (messageId, offsets)
-                    let replyMessage: Message<OutputMessageBody> =
-                        {
-                            Source = node.Info.NodeId
-                            Destination = msg.Source
-                            MessageBody = replyMessageBody
-                        }
-                    node, [ replyMessage ]
-
-                let rec responseMessageHandler (awaitingResponses: List<LogKey * MessageId>) (offsets: Map<LogKey, Offset>) (logKey, maybeOffset: Option<Offset>) (node: Node) : TransitionResult =
-                    let awaitingResponses = List.filter (fun x -> fst x <> logKey) awaitingResponses
-                    let offsets =
-                        maybeOffset
-                        |> Option.map (fun offset -> offsets.Add (logKey, offset))
-                        |> Option.defaultValue offsets
-                    if awaitingResponses = [] then
-                        replyListCommittedOffsets offsets node
-                    else
-                        let node = registerAllCallbacks awaitingResponses offsets node
-                        node, []
-                and registerAllCallbacks (awaitingResponses: List<LogKey * MessageId>) (offsets: Map<LogKey, Offset>) (node: Node) : Node =
-                    awaitingResponses
-                    |> List.fold (fun (node: Node) (logKey, messageId) ->
-                        let node = node.RegisterReadOkHandler messageId (fun node (Value value) -> responseMessageHandler awaitingResponses offsets (logKey, Some <| Offset value) node)
-                        let node = node.RegisterErrorKeyDoesNotExistHandler messageId (fun node -> responseMessageHandler awaitingResponses offsets (logKey, None) node)
-                        node
-                    ) node
-
-                let awaitingResponses =
-                    queryMessages
-                    |> List.map fst
-
-                let node =
-                    registerAllCallbacks awaitingResponses Map.empty node
-
-                return! (node, queryMessages |> List.map snd)
+                yield
+                    {
+                        Source = node.Info.NodeId
+                        Destination = msg.Source
+                        MessageBody = ListCommittedOffsetsAck (messageId, offsets)
+                    }
+                return node
 
             | InputMessageBody.KVResponse response ->
                 return!
