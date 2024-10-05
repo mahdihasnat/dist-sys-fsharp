@@ -12,5 +12,9 @@ type AccumulatorBuilder() =
         y, sideEffects1 @ sideEffects2
     member this.Delay(f: unit -> Accumulator<'T, 'SideEffect>) : Accumulator<'T, 'SideEffect> = f ()
     member this.ReturnFrom (x: Accumulator<'T, 'SideEffect>) = x
+    member this.Bind(x: Accumulator<'T, 'SideEffect>, f: 'T -> Accumulator<'U, 'SideEffect>) : Accumulator<'U, 'SideEffect> =
+        let (value, sideEffects1) = x
+        let (newValue, sideEffects2) = f value
+        newValue, sideEffects1 @ sideEffects2
 
 let accumulator = new AccumulatorBuilder()
