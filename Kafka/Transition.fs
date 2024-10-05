@@ -148,6 +148,22 @@ let rec refreshLogs (logKeys: List<LogKey>) node (f : Node -> TransitionResult) 
         }
     ) (node, [])
 
+let compareAndSwapToKVStore (target: NodeId) (key: string) (oldValue: Value) (newValue: Value) (createIfDoesNotExist: bool) (node: Node) (f: Node * Result<unit,unit> -> TransitionResult) : TransitionResult =
+    transition {
+        let node, updateMessageId = genMessageId node
+        let linKVWriteMessageBody: OutputMessageBody =
+            KVRequest (KVRequestMessageBody.CompareAndSwap (updateMessageId, key, oldValue, newValue, createIfDoesNotExist))
+        yield
+            {
+                Source = node.Info.NodeId
+                Destination = NodeId.LinKv
+                MessageBody = linKVWriteMessageBody
+            }
+        let node = node.RegisterCompareAndSwapOkHandler updateMessageId (fun node -> f (node, Ok ()))
+        let node = node.RegisterErrorPreconditionFailedHandler updateMessageId (fun node -> f (node, Error ()))
+        return node
+    }
+
 let assertConsistency (node: Node) : unit =
     node.CachedMessages
     |> Map.forall (fun logKey values ->
@@ -173,52 +189,31 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                 // read current offset from lin-kv
                 // increment current offsets from lin-kv
                 // write log value to seq-kv
-                let replySendOk (node: Node) (offset: Offset) : TransitionResult =
-                    let sendOkReplyMessage =
-                        {
-                            Source = node.Info.NodeId
-                            Destination = msg.Source
-                            MessageBody = OutputMessageBody.SendAck (messageId, offset)
-                        }
-                    eprintfn $"send: key: %A{key} value: %A{value} send_ok reply on {offset}"
-                    node, [sendOkReplyMessage]
 
-                let withWriteLog (node: Node) (offset: Offset) : TransitionResult =
+                let rec readAndIncrementOffset (node: Node) (f: Node * Offset -> TransitionResult) : TransitionResult =
                     transition {
-                        let! node = writeToKVServiceAndForget node NodeId.SeqKv (logIndex key offset) (Value value.Value)
-                        return! replySendOk node offset
+                        let! node, res = readFromKVService node NodeId.LinKv $"current_offset_{key.Value}"
+                        let oldOffset =
+                            match res with
+                            | Ok (Value value) -> Offset value
+                            | Error () -> Offset -1
+                        let newOffset = Offset (oldOffset.Value + 1)
+                        let! node, res = compareAndSwapToKVStore NodeId.LinKv $"current_offset_{key.Value}" (Value oldOffset.Value) (Value newOffset.Value) (newOffset.Value = 0) node
+                        match res with
+                        | Ok () ->
+                            return! f (node, newOffset)
+                        | Error () ->
+                            return! readAndIncrementOffset node f
                     }
-
-                let withLatestOffsetRead (key: LogKey) node (f: Node -> Offset -> TransitionResult) : TransitionResult =
-                    let node, queryMessageId = genMessageId node
-                    let linKVReadMessage =
-                        {
-                            Source = node.Info.NodeId
-                            Destination = NodeId.LinKv
-                            MessageBody = KVRequest (KVRequestMessageBody.Read (queryMessageId, $"current_offset_{key.Value}"))
-                        }
-                    let node = node.RegisterReadOkHandler queryMessageId (fun node (Value value) -> f node (Offset value))
-                    let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node -> f node (Offset -1))
-                    eprintfn $"send: key: %A{key} value: %A{value} lin-kv read offset"
-                    node, [linKVReadMessage]
-
-                let rec withIncrementOffsetWrite (node: Node) (Offset offset) : TransitionResult =
-                    let nextOffset = Offset (offset + 1)
-                    let node, updateMessageId = genMessageId node
-                    let linKVWriteMessageBody: OutputMessageBody =
-                        KVRequest (KVRequestMessageBody.CompareAndSwap (updateMessageId, $"current_offset_{key.Value}", Value offset, Value nextOffset.Value, nextOffset.Value = 0))
-                    let linKVWriteMessage =
-                        {
-                            Source = node.Info.NodeId
-                            Destination = NodeId.LinKv
-                            MessageBody = linKVWriteMessageBody
-                        }
-                    let node = node.RegisterCompareAndSwapOkHandler updateMessageId (fun node -> withWriteLog node nextOffset)
-                    let node = node.RegisterErrorPreconditionFailedHandler updateMessageId (fun node -> withLatestOffsetRead key node withIncrementOffsetWrite)
-                    eprintfn $"send: key: %A{key} value: %A{value} cas write to {offset + 1}"
-                    node, [linKVWriteMessage]
-
-                return! withLatestOffsetRead key node withIncrementOffsetWrite
+                let! node, offset = readAndIncrementOffset node
+                let! node = writeToKVServiceAndForget node NodeId.SeqKv (logIndex key offset) (Value value.Value)
+                yield
+                    {
+                        Source = node.Info.NodeId
+                        Destination = msg.Source
+                        MessageBody = OutputMessageBody.SendAck (messageId, offset)
+                    }
+                return node
 
             | InputMessageBody.Poll (messageId, offsets) ->
                 let! node = refreshLogs (offsets.Keys |> List.ofSeq) node
