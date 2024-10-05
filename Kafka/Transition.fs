@@ -22,13 +22,11 @@ let genMessageId (node: Node) : Node * MessageId =
 let readFromKVService (node: Node) (target: NodeId) (key: string) (f : Node * Result<Value,unit> -> TransitionResult) : TransitionResult =
     transition {
         let node, queryMessageId = genMessageId node
-        let kvReadMessageBody: OutputMessageBody =
-            KVRequest (KVRequestMessageBody.Read (queryMessageId, key))
         yield
             {
                 Source = node.Info.NodeId
                 Destination = target
-                MessageBody = kvReadMessageBody
+                MessageBody = KVRequest (KVRequestMessageBody.Read (queryMessageId, key))
             }
         let node = node.RegisterReadOkHandler queryMessageId (fun node value -> f (node, Ok value))
         let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node -> f (node, Error ()))
@@ -102,30 +100,14 @@ let readFromKVServiceInParallel (node: Node) (targets: NonEmptyList<NodeId * str
         return node
     }
 
-let writeToKVServiceAndWait (node: Node) (target: NodeId) (key: string) (value: Value) (f : Node -> TransitionResult) : TransitionResult =
-    transition {
-        let node, queryMessageId = genMessageId node
-        let kvWriteMessageBody: OutputMessageBody =
-            KVRequest (KVRequestMessageBody.Write (queryMessageId, key, value))
-        yield
-            {
-                Source = node.Info.NodeId
-                Destination = target
-                MessageBody = kvWriteMessageBody
-            }
-        let node = node.RegisterWriteOkHandler queryMessageId (fun node -> f node)
-        return node
-    }
 let writeToKVServiceAndForget (node: Node) (target: NodeId) (key: string) (value: Value) (f : Node -> TransitionResult) : TransitionResult =
     transition {
         let node, queryMessageId = genMessageId node
-        let kvWriteMessageBody: OutputMessageBody =
-            KVRequest (KVRequestMessageBody.Write (queryMessageId, key, value))
         yield
             {
                 Source = node.Info.NodeId
                 Destination = target
-                MessageBody = kvWriteMessageBody
+                MessageBody = KVRequest (KVRequestMessageBody.Write (queryMessageId, key, value))
             }
         let node = node.RegisterWriteOkHandler queryMessageId (fun node -> node, [])
         return! f node
@@ -192,34 +174,29 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                 // increment current offsets from lin-kv
                 // write log value to seq-kv
                 let replySendOk (node: Node) (offset: Offset) : TransitionResult =
-                    let sendOkReplyMessageBody =
-                        OutputMessageBody.SendAck (messageId, offset)
                     let sendOkReplyMessage =
                         {
                             Source = node.Info.NodeId
                             Destination = msg.Source
-                            MessageBody = sendOkReplyMessageBody
+                            MessageBody = OutputMessageBody.SendAck (messageId, offset)
                         }
                     eprintfn $"send: key: %A{key} value: %A{value} send_ok reply on {offset}"
                     node, [sendOkReplyMessage]
 
                 let withWriteLog (node: Node) (offset: Offset) : TransitionResult =
                     transition {
-                        let! node = writeToKVServiceAndWait node NodeId.SeqKv (logIndex key offset) (Value value.Value)
+                        let! node = writeToKVServiceAndForget node NodeId.SeqKv (logIndex key offset) (Value value.Value)
                         return! replySendOk node offset
                     }
 
                 let withLatestOffsetRead (key: LogKey) node (f: Node -> Offset -> TransitionResult) : TransitionResult =
                     let node, queryMessageId = genMessageId node
-                    let linKVReadMessageBody: OutputMessageBody =
-                        KVRequest (KVRequestMessageBody.Read (queryMessageId, $"current_offset_{key.Value}"))
                     let linKVReadMessage =
                         {
                             Source = node.Info.NodeId
                             Destination = NodeId.LinKv
-                            MessageBody = linKVReadMessageBody
+                            MessageBody = KVRequest (KVRequestMessageBody.Read (queryMessageId, $"current_offset_{key.Value}"))
                         }
-
                     let node = node.RegisterReadOkHandler queryMessageId (fun node (Value value) -> f node (Offset value))
                     let node = node.RegisterErrorKeyDoesNotExistHandler queryMessageId (fun node -> f node (Offset -1))
                     eprintfn $"send: key: %A{key} value: %A{value} lin-kv read offset"
