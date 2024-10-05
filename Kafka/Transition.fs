@@ -35,6 +35,35 @@ let readFromKVService (node: Node) (target: NodeId) (key: string) (f : Node * Re
         return node
     }
 
+let writeToKVServiceAndWait (node: Node) (target: NodeId) (key: string) (value: Value) (f : Node -> TransitionResult) : TransitionResult =
+    transition {
+        let node, queryMessageId = genMessageId node
+        let kvWriteMessageBody: OutputMessageBody =
+            KVRequest (KVRequestMessageBody.Write (queryMessageId, key, value))
+        yield
+            {
+                Source = node.Info.NodeId
+                Destination = target
+                MessageBody = kvWriteMessageBody
+            }
+        let node = node.RegisterWriteOkHandler queryMessageId (fun node -> f node)
+        return node
+    }
+let writeToKVServiceAndForget (node: Node) (target: NodeId) (key: string) (value: Value) (f : Node -> TransitionResult) : TransitionResult =
+    transition {
+        let node, queryMessageId = genMessageId node
+        let kvWriteMessageBody: OutputMessageBody =
+            KVRequest (KVRequestMessageBody.Write (queryMessageId, key, value))
+        yield
+            {
+                Source = node.Info.NodeId
+                Destination = target
+                MessageBody = kvWriteMessageBody
+            }
+        let node = node.RegisterWriteOkHandler queryMessageId (fun node -> node, [])
+        return! f node
+    }
+
 let refreshLog (logKey: LogKey) node (f : Node -> TransitionResult) : TransitionResult =
     let rec refreshLogsNext (node: Node) : TransitionResult =
         transition {
@@ -103,18 +132,10 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                     node, [sendOkReplyMessage]
 
                 let withWriteLog (node: Node) (offset: Offset) : TransitionResult =
-                    let node, writeLogMessageId = genMessageId node
-                    let seqKVWriteMessageBody: OutputMessageBody =
-                        KVRequest (KVRequestMessageBody.Write (writeLogMessageId, logIndex key offset, Value value.Value))
-                    let seqKVWriteMessage =
-                        {
-                            Source = node.Info.NodeId
-                            Destination = NodeId.SeqKv
-                            MessageBody = seqKVWriteMessageBody
-                        }
-                    let node = node.RegisterWriteOkHandler writeLogMessageId (fun node -> replySendOk node offset)
-                    eprintfn $"send: key: %A{key} value: %A{value} seq-kv write log in {offset} logIndex: {logIndex key offset}"
-                    node, [seqKVWriteMessage]
+                    transition {
+                        let! node = writeToKVServiceAndWait node NodeId.SeqKv (logIndex key offset) (Value value.Value)
+                        return! replySendOk node offset
+                    }
 
                 let withLatestOffsetRead (key: LogKey) node (f: Node -> Offset -> TransitionResult) : TransitionResult =
                     let node, queryMessageId = genMessageId node
@@ -191,16 +212,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>,unit>) : T
                     |> List.fold (fun (nodeResult: TransitionResult) (key, Offset offset) ->
                         transition {
                             let! node = nodeResult
-                            let node, updateMessageId = genMessageId node
-                            let linKVWriteMessageBody: OutputMessageBody =
-                                KVRequest (KVRequestMessageBody.Write (updateMessageId, "committed_offset_" + key.Value, Value offset))
-                            yield
-                                {
-                                    Source = node.Info.NodeId
-                                    Destination = NodeId.LinKv
-                                    MessageBody = linKVWriteMessageBody
-                                }
-                            let node = node.RegisterWriteOkHandler updateMessageId (fun node -> node, [])
+                            let! node = writeToKVServiceAndForget node NodeId.LinKv ("committed_offset_" + key.Value) (Value offset)
                             return node
                         }
                     ) (transition { return node })
