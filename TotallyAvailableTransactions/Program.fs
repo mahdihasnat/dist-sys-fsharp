@@ -25,6 +25,7 @@ let main args =
             {
                 Info = nodeInfo
                 NextMessageId = 0
+                Storage = Map.empty
 
                 OnKVReadOkHandlers = Map.empty
                 OnKVWriteOkHandlers = Map.empty

@@ -69,7 +69,7 @@ type InputMessageBody =
         | x -> Decode.Fail.objExpected x
 
 type TransactionOperationOutput =
-    | Read of Key * Value
+    | Read of Key * Option<Value>
     | Write of Key * Value
 
     static member ToJson (x: TransactionOperationOutput) =
@@ -81,7 +81,7 @@ type TransactionOperationOutput =
 
 
 type OutputMessageBody =
-    | TxnAck of InReplyTo: MessageId * List<TransactionOperationOutput>
+    | TxnAck of InReplyTo: MessageId * NonEmptyList<TransactionOperationOutput>
     | KVRequest of KVRequestMessageBody<Value>
 
     static member ToJson (x: OutputMessageBody) =
@@ -94,6 +94,7 @@ type Node =
     {
         Info: InitialNodeInfo
         NextMessageId: int
+        Storage: Map<Key, Value>
 
         OnKVReadOkHandlers: Map<MessageId, Node -> Value -> TransitionResult>
         OnKVWriteOkHandlers: Map<MessageId, Node -> TransitionResult>
