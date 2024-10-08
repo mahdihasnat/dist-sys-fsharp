@@ -42,6 +42,7 @@ jobs:
                     dotnet publish ./GrowOnlyCounterFtBroadcast/GrowOnlyCounterFtBroadcast.fsproj --no-self-contained -o ./bin/GrowOnlyCounterFtBroadcast/
                     dotnet publish ./GrowOnlyCounterFtSeqKV/GrowOnlyCounterFtSeqKV.fsproj --no-self-contained -o ./bin/GrowOnlyCounterFtSeqKV/
                     dotnet publish ./Kafka/Kafka.fsproj --no-self-contained -o ./bin/Kafka/
+                    dotnet publish ./TotallyAvailableTransactions/TotallyAvailableTransactions.fsproj --no-self-contained -o ./bin/TotallyAvailableTransactions/
 
             -   name: Test Echo challenge
                 run: ./maelstrom/maelstrom test -w echo --bin ./bin/Echo/Echo --node-count 10 --time-limit 1
