@@ -81,6 +81,9 @@ jobs:
             -   name: Test Multi node Kafka style log
                 run: ./maelstrom/maelstrom test -w kafka --bin ./bin/Kafka/Kafka --node-count 2 --concurrency 2n --time-limit 20 --rate 1000
 
+            -   name: Test Single node Totally Available Transactions
+                run: ./maelstrom/maelstrom test -w txn-rw-register --bin ./bin/TotallyAvailableTransactions/TotallyAvailableTransactions --node-count 1 --time-limit 20 --rate 1000 --concurrency 2n --consistency-models read-uncommitted --availability total
+
             # -   uses: actions/upload-artifact@v4
             #     if: always()
             #     with:
