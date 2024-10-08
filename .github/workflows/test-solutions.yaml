@@ -36,54 +36,54 @@ jobs:
 
             -   name: Build projeccts
                 run: |
-                    dotnet publish ./Echo/Echo.fsproj --no-self-contained -o ./bin/Echo/
-                    dotnet publish ./UniqueIdGen/UniqueIdGen.fsproj --no-self-contained -o ./bin/UniqueIdGen/
-                    dotnet publish ./Broadcast/Broadcast.fsproj --no-self-contained -o ./bin/Broadcast/
-                    dotnet publish ./GrowOnlyCounterFtBroadcast/GrowOnlyCounterFtBroadcast.fsproj --no-self-contained -o ./bin/GrowOnlyCounterFtBroadcast/
-                    dotnet publish ./GrowOnlyCounterFtSeqKV/GrowOnlyCounterFtSeqKV.fsproj --no-self-contained -o ./bin/GrowOnlyCounterFtSeqKV/
-                    dotnet publish ./Kafka/Kafka.fsproj --no-self-contained -o ./bin/Kafka/
-                    dotnet publish ./TotallyAvailableTransactions/TotallyAvailableTransactions.fsproj --no-self-contained -o ./bin/TotallyAvailableTransactions/
+                    dotnet publish ./Echo/Echo.fsproj --no-self-contained -o ./bin/
+                    dotnet publish ./UniqueIdGen/UniqueIdGen.fsproj --no-self-contained -o ./bin/
+                    dotnet publish ./Broadcast/Broadcast.fsproj --no-self-contained -o ./bin/
+                    dotnet publish ./GrowOnlyCounterFtBroadcast/GrowOnlyCounterFtBroadcast.fsproj --no-self-contained -o ./bin/
+                    dotnet publish ./GrowOnlyCounterFtSeqKV/GrowOnlyCounterFtSeqKV.fsproj --no-self-contained -o ./bin/
+                    dotnet publish ./Kafka/Kafka.fsproj --no-self-contained -o ./bin/
+                    dotnet publish ./TotallyAvailableTransactions/TotallyAvailableTransactions.fsproj --no-self-contained -o ./bin/
 
             -   name: Test Echo challenge
-                run: ./maelstrom/maelstrom test -w echo --bin ./bin/Echo/Echo --node-count 10 --time-limit 1
+                run: ./maelstrom/maelstrom test -w echo --bin ./bin/Echo --node-count 10 --time-limit 1
 
             -   name: Test Unique Id Generation challenge
-                run: ./maelstrom/maelstrom test -w unique-ids --bin ./bin/UniqueIdGen/UniqueIdGen --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition
+                run: ./maelstrom/maelstrom test -w unique-ids --bin ./bin/UniqueIdGen --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition
 
             -   name: Test Single Node Broadcast challenge
-                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 1 --time-limit 20 --rate 10 10
+                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast --node-count 1 --time-limit 20 --rate 10 10
 
             -   name: Test Multi Node Broadcast challenge
-                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 5 --time-limit 20 --rate 10 10
+                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast --node-count 5 --time-limit 20 --rate 10 10
 
             -   name: Test Fault Tolerant Broadcast challenge
-                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 5 --time-limit 20 --rate 10 --nemesis partition 10
+                run: ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast --node-count 5 --time-limit 20 --rate 10 --nemesis partition 10
 
             -   name: Test Efficient BroadCast, Part 1
                 run: |
-                    ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 --nemesis partition 90
-                    ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 40
+                    ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 --nemesis partition 90
+                    ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 40
                     python ./.github/scripts/checker_task_3.py --msgs-per-op 30 --median-latency 400 --max-latency 600
 
             -   name: Test Efficient BroadCast, Part 2
                 run: |
-                    ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 150
+                    ./maelstrom/maelstrom test -w broadcast --bin ./bin/Broadcast --node-count 25 --time-limit 20 --rate 100 --latency 100 150
                     python ./.github/scripts/checker_task_3.py --msgs-per-op 20 --median-latency 1000 --max-latency 2000
 
             -   name: Test Grow Only Counter Ft Broadcast
-                run: ./maelstrom/maelstrom test -w g-counter --bin ./bin/GrowOnlyCounterFtBroadcast/GrowOnlyCounterFtBroadcast --node-count 3 --rate 100 --time-limit 20 --nemesis partition
+                run: ./maelstrom/maelstrom test -w g-counter --bin ./bin/GrowOnlyCounterFtBroadcast --node-count 3 --rate 100 --time-limit 20 --nemesis partition
 
             -   name: Test Grow Only Counter Ft SeqKV
-                run: ./maelstrom/maelstrom test -w g-counter --bin ./bin/GrowOnlyCounterFtSeqKV/GrowOnlyCounterFtSeqKV --node-count 3 --rate 100 --time-limit 20 --nemesis partition
+                run: ./maelstrom/maelstrom test -w g-counter --bin ./bin/GrowOnlyCounterFtSeqKV --node-count 3 --rate 100 --time-limit 20 --nemesis partition
 
             -   name: Test Single node Kafka style log
-                run: ./maelstrom/maelstrom test -w kafka --bin ./bin/Kafka/Kafka --node-count 1 --concurrency 2n --time-limit 20 --rate 1000
+                run: ./maelstrom/maelstrom test -w kafka --bin ./bin/Kafka --node-count 1 --concurrency 2n --time-limit 20 --rate 1000
 
             -   name: Test Multi node Kafka style log
-                run: ./maelstrom/maelstrom test -w kafka --bin ./bin/Kafka/Kafka --node-count 2 --concurrency 2n --time-limit 20 --rate 1000
+                run: ./maelstrom/maelstrom test -w kafka --bin ./bin/Kafka --node-count 2 --concurrency 2n --time-limit 20 --rate 1000
 
             -   name: Test Single node Totally Available Transactions
-                run: ./maelstrom/maelstrom test -w txn-rw-register --bin ./bin/TotallyAvailableTransactions/TotallyAvailableTransactions --node-count 1 --time-limit 20 --rate 1000 --concurrency 2n --consistency-models read-uncommitted --availability total
+                run: ./maelstrom/maelstrom test -w txn-rw-register --bin ./bin/TotallyAvailableTransactions --node-count 1 --time-limit 20 --rate 1000 --concurrency 2n --consistency-models read-uncommitted --availability total
 
             # -   uses: actions/upload-artifact@v4
             #     if: always()
