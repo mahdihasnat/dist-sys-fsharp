@@ -13,7 +13,7 @@ open System.Threading.Tasks
 open Argu
 
 [<RequireQualifiedAccess>]
-type Arguments=
+type Arguments =
     | [<MainCommand>] TimerIntervalMilliseconds of int
 
     interface IArgParserTemplate with
@@ -25,13 +25,18 @@ type Arguments=
 let main args =
     let parser = ArgumentParser.Create<Arguments> ()
     eprintfn $"Arguments: {args}"
-    let parseResults = parser.ParseCommandLine(inputs = args, raiseOnUsage = false, ignoreMissing = false, ignoreUnrecognized = false)
+
+    let parseResults =
+        parser.ParseCommandLine (inputs = args, raiseOnUsage = false, ignoreMissing = false, ignoreUnrecognized = false)
+
     let timerIntervalMilliseconds =
-        parseResults.GetResult(Arguments.TimerIntervalMilliseconds)
+        parseResults.GetResult (Arguments.TimerIntervalMilliseconds)
+
     eprintfn $"TimerIntervalMilliseconds: {timerIntervalMilliseconds}"
     let nodeInfo = initNode ()
-    let semaphore: SemaphoreSlim = new SemaphoreSlim(1)
-    let nodeRef : ref<Node> =
+    let semaphore: SemaphoreSlim = new SemaphoreSlim (1)
+
+    let nodeRef: ref<Node> =
         ref
             {
                 Info = nodeInfo
@@ -42,19 +47,14 @@ let main args =
                 TimedOutMessages = Map.empty
                 NeighborAckedMessages = Map.empty
             }
-    let task1 = processStdin
-                    (nodeRef, semaphore)
-                    transition
+
+    let task1 = processStdin (nodeRef, semaphore) transition
     let async1 = task1 |> Async.AwaitTask
-    let task2 = repeatSchedule
-                    (TimeSpan.FromMilliseconds (float timerIntervalMilliseconds))
-                    (nodeRef, semaphore)
-                    (fun _node -> ())
-                    (transition)
+
+    let task2 =
+        repeatSchedule (TimeSpan.FromMilliseconds (float timerIntervalMilliseconds)) (nodeRef, semaphore) (fun _node -> ()) (transition)
+
     let async2 = task2 |> Async.AwaitTask
-    [| async2; async1 |]
-    |> Async.Parallel
-    |> Async.RunSynchronously
-    |> ignore
+    [| async2; async1 |] |> Async.Parallel |> Async.RunSynchronously |> ignore
 
     0

@@ -24,9 +24,10 @@ open Fleece.Internals
 [<EntryPoint>]
 let main args =
 
-    let semaphore: SemaphoreSlim = new SemaphoreSlim(1)
+    let semaphore: SemaphoreSlim = new SemaphoreSlim (1)
     let nodeInfo = initNode ()
-    let nodeRef : ref<Node> =
+
+    let nodeRef: ref<Node> =
         ref
             {
                 Info = nodeInfo
@@ -36,12 +37,13 @@ let main args =
                 OnSeqKVCompareAndSwapOkHandlers = Map.empty
                 OnSeqKVCompareAndSwapPreconditionFailedHandlers = Map.empty
             }
-    let task1 = processStdin
-                    (nodeRef, semaphore)
-                    transition
+
+    let task1 = processStdin (nodeRef, semaphore) transition
+
     [| task1 |]
     |> Array.map Async.AwaitTask
     |> Async.Parallel
     |> Async.RunSynchronously
     |> ignore
+
     0

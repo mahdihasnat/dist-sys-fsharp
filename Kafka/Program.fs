@@ -15,9 +15,10 @@ open Utilities
 
 [<EntryPoint>]
 let main args =
-    let semaphore: SemaphoreSlim = new SemaphoreSlim(1)
+    let semaphore: SemaphoreSlim = new SemaphoreSlim (1)
     let nodeInfo = initNode ()
-    let nodeRef : ref<Node> =
+
+    let nodeRef: ref<Node> =
         ref
             {
                 Info = nodeInfo
@@ -30,9 +31,8 @@ let main args =
                 OnKVCompareAndSwapOkHandlers = Map.empty
                 OnKVErrorPreconditionFailedHandlers = Map.empty
             }
-    let task1 = processStdin
-                    (nodeRef, semaphore)
-                    transitionOuter
+
+    let task1 = processStdin (nodeRef, semaphore) transitionOuter
     let async1 = task1 |> Async.AwaitTask
     // let task2 = repeatSchedule
     //                 (TimeSpan.FromMilliseconds 100)
@@ -40,9 +40,6 @@ let main args =
     //                 (fun _ -> ())
     //                 transition
     // let async2 = task2 |> Async.AwaitTask
-    [| async1 |]
-    |> Async.Parallel
-    |> Async.RunSynchronously
-    |> ignore
+    [| async1 |] |> Async.Parallel |> Async.RunSynchronously |> ignore
 
     0
