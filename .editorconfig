@@ -1,0 +1,13 @@
+[*.fs]
+fsharp_space_before_uppercase_invocation = true
+indent_size = 4
+fsharp_bar_before_discriminated_union_declaration = false
+fsharp_multiline_bracket_style = aligned
+max_line_length = 150
+insert_final_newline = true
+fsharp_space_before_parameter = true
+fsharp_space_before_lowercase_invocation = true
+fsharp_space_before_class_constructor = true
+fsharp_space_before_member = true
+fsharp_space_before_semicolon = false
+fsharp_max_record_number_of_items = 2
