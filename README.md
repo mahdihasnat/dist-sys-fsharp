@@ -72,6 +72,9 @@ One obvious optimization to reduce the number of messages is to maintain a local
 #### Update:
 As per discussion with [upobir](https://github.com/upobir), I understood that my previous solution is incorrect. Since I am interacting with sequential key value store, my read queries can result stale read. What if adversarial seq-kv agent never gave me latest value. No amount of read can guarantee latest up-to-date read of `sum` variable. One idea comes to mind that say we read `value` from seq-kv. And then we do another `cas` operation from `value` to `value`. If the cas operation succeeds then we can say we got the latest value. But here is a catch, cas operation doesn't mean it will always compare with last global-order value. Since the `cas` operation doesn't change anything, seq-kv can reply `cas_ok` for this dummy operation. It is like virtually adding a no-op commit in the past position of global-order. So whats next? How do I get up-to-date read from seq-kv. Another great idea is storing a version for key. When a node read a value, it will then increment the version of that value (via a cas operation). If cas succeeds that means we got the last global-order value. If cas fails we read + increment version again. In this way we can extract latest state from a sequential key value store.
 
+# Challenge #4: Grow-Only Counter with CRDT
+CRDT stands for Conflict free replicated data type. Idea is pretty simple. Each node has a counter and replicated to all other nodes. Read query will simply sum all the counters. Since a counter can only increase, merging is just taking max of local counter and incoming counter.
+
 # Challenge #5a: Single node kafka style log
 Kept a dictionary of list of logs for each log key. This is quiet simple implementation to maintain information in the dictionary. Also I needed another dictionary to maintain the committed offsets against each log key.
 
