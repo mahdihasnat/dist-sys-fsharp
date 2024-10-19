@@ -131,10 +131,9 @@ let writeToKVServiceAndForget (node: Node) (target: NodeId) (key: string) (value
         return! f node
     }
 
-let getLogs (logKey: LogKey) (node: Node) (f: Node -> TransitionResult) : TransitionResult =
+let getLogs (logKey: LogKey) (node: Node) : TransitionResult =
     let rec refreshLogsNext (offset: Offset) (node: Node) : TransitionResult =
         transition {
-            let node, queryMessageId = genMessageId node
             let! node, res = readFromKVService node NodeId.SeqKv (logIndex logKey offset)
 
             match res with
@@ -153,7 +152,15 @@ let getLogs (logKey: LogKey) (node: Node) (f: Node -> TransitionResult) : Transi
                 return! refreshLogsNext (Offset (offset.Value + 1)) node
             | Error () ->
                 eprintfn $"getLogs:: logKey: {logKey} offset: {offset} read failed"
-                return! f node
+
+                match node.CurrentLogFetchingOperations.TryFind logKey with
+                | Some f ->
+                    return!
+                        f
+                            { node with
+                                CurrentLogFetchingOperations = node.CurrentLogFetchingOperations.Remove logKey
+                            }
+                | None -> return failwithf $"getLogs:: logKey: {logKey} offset: {offset} read failed"
         }
 
     refreshLogsNext
@@ -162,22 +169,63 @@ let getLogs (logKey: LogKey) (node: Node) (f: Node -> TransitionResult) : Transi
                 .Count)
         node
 
-let rec refreshLogs (logKeys: List<LogKey>) node (f: Node -> TransitionResult) : TransitionResult =
-    let (remainingKeys: ref<List<LogKey>>) = ref logKeys
+let rec refreshLogs (logKeys: Set<LogKey>) node (f: Node -> TransitionResult) : TransitionResult =
+    match logKeys |> NonEmptySet.tryOfSet with
+    | None -> f node
+    | Some logKeys ->
+        let (remainingKeys: ref<NonEmptySet<LogKey>>) = ref logKeys
 
-    let rec refreshLogHandler (logKey: LogKey) (node: Node) : TransitionResult =
-        remainingKeys.Value <- List.filter ((<>) logKey) remainingKeys.Value
-        if remainingKeys.Value = [] then f node else node, []
+        let rec refreshLogHandler (logKey: LogKey) (node: Node) : TransitionResult =
+            match
+                remainingKeys.Value
+                |> NonEmptySet.toSet
+                |> Set.remove logKey
+                |> NonEmptySet.tryOfSet
+            with
+            | Some remaining ->
+                remainingKeys.Value <- remaining
+                node, []
+            | None -> f node
 
-    logKeys
-    |> List.fold
-        (fun nodeTR logKey ->
-            transition {
-                let! node = nodeTR
-                let! node = getLogs logKey node (fun node -> refreshLogHandler logKey node)
-                return node
-            })
-        (node, [])
+        logKeys
+        |> NonEmptySet.toList
+        |> List.fold
+            (fun nodeTR logKey ->
+                transition {
+                    let! node = nodeTR
+
+                    match node.CurrentLogFetchingOperations.TryFind logKey with
+                    | None ->
+                        let! node =
+                            getLogs
+                                logKey
+                                { node with
+                                    CurrentLogFetchingOperations =
+                                        node.CurrentLogFetchingOperations.Add (logKey, (fun node -> refreshLogHandler logKey node))
+                                }
+
+                        return node
+                    | Some existingHandler ->
+                        eprintfn $"refreshLogs: logKey %A{logKey} already being fetched"
+
+                        let node =
+                            { node with
+                                CurrentLogFetchingOperations =
+                                    node.CurrentLogFetchingOperations.Add (
+                                        logKey,
+                                        (fun node ->
+                                            transition {
+                                                let! node = existingHandler node
+                                                return! refreshLogHandler logKey node
+                                            }
+
+                                        )
+                                    )
+                            }
+
+                        return node
+                })
+            (node, [])
 
 let compareAndSwapToKVStore
     (target: NodeId)
@@ -273,7 +321,7 @@ let transition (node: Node) (action: Choice<Message<InputMessageBody>, unit>) : 
                 return node
 
             | InputMessageBody.Poll (messageId, offsets) ->
-                let! node = refreshLogs (offsets.Keys |> List.ofSeq) node
+                let! node = refreshLogs (offsets.Keys |> Set.ofSeq) node
 
                 let messages: Map<LogKey, List<Offset * LogValue>> =
                     offsets

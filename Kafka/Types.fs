@@ -123,6 +123,7 @@ type Node =
         NextMessageId: int
 
         CachedMessages: Map<LogKey, Map<Offset, LogValue>>
+        CurrentLogFetchingOperations: Map<LogKey, Node -> TransitionResult>
 
         OnKVReadOkHandlers: Map<MessageId, Node -> Value -> TransitionResult>
         OnKVWriteOkHandlers: Map<MessageId, Node -> TransitionResult>
