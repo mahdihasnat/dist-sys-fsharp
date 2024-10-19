@@ -18,6 +18,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "GrowOnlyCounterFtSeqKV", "G
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "TotallyAvailableTransactions", "TotallyAvailableTransactions\TotallyAvailableTransactions.fsproj", "{846AFE87-F294-4067-AE62-CBF8BA10A8F5}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "GrowOnlyCounterFtCRDT", "GrowOnlyCounterFtCRDT\GrowOnlyCounterFtCRDT.fsproj", "{756F9017-6277-412E-AB29-83F68EF2848A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -60,5 +62,9 @@ Global
 		{846AFE87-F294-4067-AE62-CBF8BA10A8F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{846AFE87-F294-4067-AE62-CBF8BA10A8F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{846AFE87-F294-4067-AE62-CBF8BA10A8F5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{756F9017-6277-412E-AB29-83F68EF2848A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{756F9017-6277-412E-AB29-83F68EF2848A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{756F9017-6277-412E-AB29-83F68EF2848A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{756F9017-6277-412E-AB29-83F68EF2848A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
